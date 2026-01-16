@@ -1,9 +1,22 @@
-// Helper declarations for battery INA226 setup
+// Helper declarations for battery sensor setup
 #pragma once
 
-#include "INA226.h"
+#include "sensors/i_sensor.h"
+#include "battery_config.h"
 
-void setupBatteryINA(INA226 &ina, unsigned int read_interval, float shunt_resistance,
-                     float current_LSB_mA, const char *voltage_path,
-                     const char *current_path, const char* power_path, const char* ah_path,
-                     const char* soc_path, float battery_capacity_ah, float initial_ah, const char* chip_name);
+namespace sensesp {
+
+/**
+ * @brief Setup battery monitoring with any ISensor implementation
+ * 
+ * Creates the sensor reading pipeline, amp-hour integration, SOC calculation,
+ * and Signal K outputs/inputs for a single battery.
+ * 
+ * @param sensor Sensor implementation (INA226, INA219, etc.)
+ * @param read_interval Sensor read interval in milliseconds
+ * @param config Battery configuration (paths, capacity, etc.)
+ */
+void setupBatterySensor(ISensor& sensor, unsigned int read_interval,
+                        const BatteryConfig& config);
+
+}  // namespace sensesp

@@ -6,39 +6,37 @@
 #include "sensesp/sensors/sensor.h"
 #include "sensesp/transforms/linear.h"
 
-using namespace sensesp;
+namespace sensesp {
 
-void setupBatteryINA(INA226& ina, unsigned int read_interval, float shunt_resistance, float current_LSB_mA, const char* voltage_path,
-                     const char* current_path, const char* power_path, const char* ah_path, 
-                     const char* soc_path, float battery_capacity_ah, float initial_ah, const char* chip_name) {
-    if (!ina.begin()) {
+void setupBatterySensor(ISensor& sensor, unsigned int read_interval,
+                        const BatteryConfig& config) {
+    // Initialize sensor hardware
+    if (!sensor.begin()) {
       while (1) {
         delay(10);
       }
     }
 
-
-    ina.configure(shunt_resistance, current_LSB_mA);
-    ina.setAverage(INA226_256_SAMPLES);
-
-    auto* voltage_sensor = new RepeatSensor<float>(read_interval, [&ina]() { return ina.getBusVoltage(); });
+    auto* voltage_sensor = new RepeatSensor<float>(read_interval, [&sensor]() { return sensor.getBusVoltage(); });
     voltage_sensor->connect_to(
-        new SKOutputFloat(voltage_path, "", new SKMetadata("V", "Voltage")));
+        new SKOutputFloat(config.voltage_path(), "", new SKMetadata("V", "Voltage")));
 
-    auto* current_sensor = new RepeatSensor<float>(read_interval, [&ina]() { return ina.getCurrent(); });
+    auto* current_sensor = new RepeatSensor<float>(read_interval, [&sensor]() { return sensor.getCurrent(); });
     current_sensor->connect_to(
-        new SKOutputFloat(current_path, "", new SKMetadata("A", "Amps")));
+        new SKOutputFloat(config.current_path(), "", new SKMetadata("A", "Amps")));
 
     // Amp-hour integrator: integrate current over time at 100 Hz to produce Ah
     // Pass battery capacity so Ah is clamped between 0 and capacity
-    // Initial Ah is set to initial_ah (typically full capacity at startup)
+    // Initial Ah is set from config (typically full capacity at startup)
     // Use a short config key (chip_name) for NVS persistence so keys stay within NVS limits
-    auto* ah_integ = new AmpHourIntegrator(String(chip_name), initial_ah, battery_capacity_ah);
+    auto* ah_integ = new AmpHourIntegrator(String(config.chip_name()), 
+                                           config.initial_ah(), 
+                                           config.marked_capacity_ah());
     current_sensor->connect_to(ah_integ);
     
     // Sample Ah from integrator at 1 Hz for Signal K output (decoupled from 100 Hz integration)
     auto* ah_sk_sampler = new RepeatSensor<float>(1000, [ah_integ]() { return ah_integ->get_ah(); });
-    ah_sk_sampler->connect_to(new SKOutputFloat(ah_path, "", new SKMetadata("Ah", "Ampere hours")));
+    ah_sk_sampler->connect_to(new SKOutputFloat(config.ah_path(), "", new SKMetadata("Ah", "Ampere hours")));
     
     // Convert Ah to State of Charge percentage (0-100%)
     // SOC% = (Ah / Current Capacity) * 100
@@ -60,18 +58,18 @@ void setupBatteryINA(INA226& ina, unsigned int read_interval, float shunt_resist
       SKOutputFloat* output_;
     };
     
-    auto* soc_consumer = new SocPercentConsumer(ah_integ, soc_path);
+    auto* soc_consumer = new SocPercentConsumer(ah_integ, config.soc_path());
     ah_sk_sampler->connect_to(soc_consumer);
     
     // Signal K input to allow remote reset/calibration of Ah value
-    auto* ah_sk_input = new SKPutRequestListener<float>(ah_path);
+    auto* ah_sk_input = new SKPutRequestListener<float>(config.ah_path());
     ah_sk_input->connect_to(ah_integ);  // Connect to integrator's set_ah() method
     
     // Signal K inputs for charge/discharge efficiency configuration
-    String charge_eff_path = String(ah_path) + "/chargeEfficiency";
-    String discharge_eff_path = String(ah_path) + "/dischargeEfficiency";
-    String capacity_path = String(ah_path) + "/capacity";  // Current capacity (degrades)
-    String marked_capacity_path = String(ah_path) + "/markedCapacity";  // Nameplate capacity
+    String charge_eff_path = String(config.ah_path()) + "/chargeEfficiency";
+    String discharge_eff_path = String(config.ah_path()) + "/dischargeEfficiency";
+    String capacity_path = String(config.ah_path()) + "/capacity";  // Current capacity (degrades)
+    String marked_capacity_path = String(config.ah_path()) + "/markedCapacity";  // Nameplate capacity
     
     // Create simple consumers that call the efficiency/ah/capacity setters
     class AhConsumer : public ValueConsumer<float> {
@@ -129,9 +127,9 @@ void setupBatteryINA(INA226& ina, unsigned int read_interval, float shunt_resist
     auto* marked_capacity_input = new SKPutRequestListener<float>(marked_capacity_path);
     marked_capacity_input->connect_to(new MarkedCapacityConsumer(ah_integ));
 
-    auto* power_sensor = new RepeatSensor<float>(read_interval, [&ina]() { return ina.getPower(); });
+    auto* power_sensor = new RepeatSensor<float>(read_interval, [&sensor]() { return sensor.getPower(); });
     power_sensor->connect_to(
-        new SKOutputFloat(power_path, "", new SKMetadata("W", "Power")));
+        new SKOutputFloat(config.power_path(), "", new SKMetadata("W", "Power")));
     
     // Expose charge/discharge efficiencies as Signal K outputs so the server
     // publishes metadata and allows PUT requests to those paths.
@@ -148,3 +146,5 @@ void setupBatteryINA(INA226& ina, unsigned int read_interval, float shunt_resist
     auto* marked_capacity_sampler = new RepeatSensor<float>(1000, [ah_integ]() { return ah_integ->get_marked_capacity_ah(); });
     marked_capacity_sampler->connect_to(new SKOutputFloat(marked_capacity_path, "", new SKMetadata("Ah", "Marked Capacity")));
 }
+
+}  // namespace sensesp

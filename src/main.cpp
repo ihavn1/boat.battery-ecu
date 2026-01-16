@@ -8,6 +8,8 @@
 
 // Sensor-specific #includes:
 #include "INA226.h"
+#include "sensors/ina226_sensor.h"
+#include "battery_config.h"
 #include "sensesp_onewire/onewire_temperature.h"
 
 using namespace sensesp;
@@ -46,15 +48,40 @@ void setup()
     // Read the sensor every BATTERY_READ_INTERVAL_MS
     const unsigned int read_interval = BATTERY_READ_INTERVAL_MS;
 
+    // Create sensor wrappers with configuration
+    INA226Sensor houseSensor(HouseBatteryINA, 0.0075F, 0.250F, INA226_256_SAMPLES);
+    INA226Sensor starterSensor(StarterBatteryINA, 0.0075F, 0.250F, INA226_256_SAMPLES);
+
+    // Battery configurations
+    BatteryConfig houseConfig(
+        "House Battery",
+        "house",
+        HOUSE_BATTERY_CAPACITY_AH,
+        HOUSE_BATTERY_CAPACITY_AH,
+        "electrical.batteries.house.voltage",
+        "electrical.batteries.house.current",
+        "electrical.batteries.house.power",
+        "electrical.batteries.house.ah",
+        "electrical.batteries.house.stateOfCharge"
+    );
+
+    BatteryConfig starterConfig(
+        "Starter Battery",
+        "start",
+        STARTER_BATTERY_CAPACITY_AH,
+        STARTER_BATTERY_CAPACITY_AH,
+        "electrical.batteries.starter.voltage",
+        "electrical.batteries.starter.current",
+        "electrical.batteries.starter.power",
+        "electrical.batteries.starter.ah",
+        "electrical.batteries.starter.stateOfCharge"
+    );
+
     // -------------- House Battery Voltage and current -----------------------
-    setupBatteryINA(HouseBatteryINA, read_interval, 0.0075F, 0.250F, "electrical.batteries.house.voltage",
-                    "electrical.batteries.house.current", "electrical.batteries.house.power", "electrical.batteries.house.ah", 
-                    "electrical.batteries.house.stateOfCharge", HOUSE_BATTERY_CAPACITY_AH, HOUSE_BATTERY_CAPACITY_AH, "house");
+    setupBatterySensor(houseSensor, read_interval, houseConfig);
 
     // -------------- Starter Battery Voltage and current -----------------------
-    setupBatteryINA(StarterBatteryINA, read_interval, 0.0075F, 0.250F, "electrical.batteries.starter.voltage",
-                    "electrical.batteries.starter.current", "electrical.batteries.starter.power", "electrical.batteries.starter.ah", 
-                    "electrical.batteries.starter.stateOfCharge", STARTER_BATTERY_CAPACITY_AH, STARTER_BATTERY_CAPACITY_AH, "start");
+    setupBatterySensor(starterSensor, read_interval, starterConfig);
 
     // ############ Battery temperature sensors ##########
     constexpr uint8_t pin = ONEWIRE_PIN;
