@@ -1,46 +1,46 @@
 #include "ah_integrator.h"
 #include <Arduino.h>
-#include <Preferences.h>
 #include <cmath>
 
 namespace sensesp {
 
-AmpHourIntegrator::AmpHourIntegrator(const String& config_path, float initial_ah, float battery_capacity_ah)
+AmpHourIntegrator::AmpHourIntegrator(const String& config_path, float initial_ah, 
+                                     float battery_capacity_ah, IStorageProvider& storage)
     : FloatTransform(config_path),
       calculator_(initial_ah, battery_capacity_ah),
-      config_path_(config_path) {
+      config_path_(config_path),
+      storage_(storage) {
   this->output_ = initial_ah;
   last_update_ms_ = millis();
   last_persisted_ah_ = initial_ah;
 
-  // Load persisted state from NVS
+  // Load persisted state from storage
   if (config_path_.length() > 0) {
     String key = config_path_;
     key.replace('/', '_');
-    Preferences prefs;
-    if (prefs.begin("battcfg", false)) {
+    if (storage_.begin("battcfg", false)) {
       // Load capacities
-      if (prefs.isKey((key + "_marked").c_str())) {
-        calculator_.set_marked_capacity_ah(prefs.getFloat((key + "_marked").c_str(), battery_capacity_ah));
+      if (storage_.isKey((key + "_marked").c_str())) {
+        calculator_.set_marked_capacity_ah(storage_.getFloat((key + "_marked").c_str(), battery_capacity_ah));
       }
-      if (prefs.isKey((key + "_current").c_str())) {
-        calculator_.set_current_capacity_ah(prefs.getFloat((key + "_current").c_str(), battery_capacity_ah));
+      if (storage_.isKey((key + "_current").c_str())) {
+        calculator_.set_current_capacity_ah(storage_.getFloat((key + "_current").c_str(), battery_capacity_ah));
       }
       // Load efficiencies
-      if (prefs.isKey((key + "_charge").c_str())) {
-        calculator_.set_charge_efficiency(prefs.getFloat((key + "_charge").c_str(), 100.0f));
+      if (storage_.isKey((key + "_charge").c_str())) {
+        calculator_.set_charge_efficiency(storage_.getFloat((key + "_charge").c_str(), 100.0f));
       }
-      if (prefs.isKey((key + "_discharge").c_str())) {
-        calculator_.set_discharge_efficiency(prefs.getFloat((key + "_discharge").c_str(), 100.0f));
+      if (storage_.isKey((key + "_discharge").c_str())) {
+        calculator_.set_discharge_efficiency(storage_.getFloat((key + "_discharge").c_str(), 100.0f));
       }
       // Load Ah value
-      if (prefs.isKey((key + "_ah").c_str())) {
-        float v = prefs.getFloat((key + "_ah").c_str(), initial_ah);
+      if (storage_.isKey((key + "_ah").c_str())) {
+        float v = storage_.getFloat((key + "_ah").c_str(), initial_ah);
         calculator_.set_ah(v);
         this->output_ = v;
         last_persisted_ah_ = v;
       }
-      prefs.end();
+      storage_.end();
     }
   }
 
@@ -62,13 +62,12 @@ void AmpHourIntegrator::set_ah(double ah) {
   if (config_path_.length() > 0) {
     String key = config_path_;
     key.replace('/', '_');
-    Preferences prefs;
-    if (prefs.begin("battcfg", false)) {
-      prefs.putFloat((key + "_ah").c_str(), (float)calculator_.get_ah());
+    if (storage_.begin("battcfg", false)) {
+      storage_.putFloat((key + "_ah").c_str(), (float)calculator_.get_ah());
       last_persisted_ah_ = calculator_.get_ah();
       last_ah_persist_ms_ = millis();
       ah_dirty_ = false;
-      prefs.end();
+      storage_.end();
     }
   }
 }
@@ -90,13 +89,12 @@ void AmpHourIntegrator::maybe_persist_ah() {
 
   String key = config_path_;
   key.replace('/', '_');
-  Preferences prefs;
-  if (prefs.begin("battcfg", false)) {
-    prefs.putFloat((key + "_ah").c_str(), (float)calculator_.get_ah());
+  if (storage_.begin("battcfg", false)) {
+    storage_.putFloat((key + "_ah").c_str(), (float)calculator_.get_ah());
     last_persisted_ah_ = calculator_.get_ah();
     last_ah_persist_ms_ = now;
     ah_dirty_ = false;
-    prefs.end();
+    storage_.end();
   }
 }
 
@@ -105,10 +103,9 @@ void AmpHourIntegrator::set_marked_capacity_ah(float capacity_ah) {
   if (config_path_.length() > 0) {
     String key = config_path_;
     key.replace('/', '_');
-    Preferences prefs;
-    if (prefs.begin("battcfg", false)) {
-      prefs.putFloat((key + "_marked").c_str(), calculator_.get_marked_capacity_ah());
-      prefs.end();
+    if (storage_.begin("battcfg", false)) {
+      storage_.putFloat((key + "_marked").c_str(), calculator_.get_marked_capacity_ah());
+      storage_.end();
     }
   }
 }
@@ -118,10 +115,9 @@ void AmpHourIntegrator::set_current_capacity_ah(float capacity_ah) {
   if (config_path_.length() > 0) {
     String key = config_path_;
     key.replace('/', '_');
-    Preferences prefs;
-    if (prefs.begin("battcfg", false)) {
-      prefs.putFloat((key + "_current").c_str(), calculator_.get_current_capacity_ah());
-      prefs.end();
+    if (storage_.begin("battcfg", false)) {
+      storage_.putFloat((key + "_current").c_str(), calculator_.get_current_capacity_ah());
+      storage_.end();
     }
   }
 }
@@ -131,10 +127,9 @@ void AmpHourIntegrator::set_charge_efficiency(float pct) {
   if (config_path_.length() > 0) {
     String key = config_path_;
     key.replace('/', '_');
-    Preferences prefs;
-    if (prefs.begin("battcfg", false)) {
-      prefs.putFloat((key + "_charge").c_str(), calculator_.get_charge_efficiency());
-      prefs.end();
+    if (storage_.begin("battcfg", false)) {
+      storage_.putFloat((key + "_charge").c_str(), calculator_.get_charge_efficiency());
+      storage_.end();
     }
   }
 }
@@ -144,10 +139,9 @@ void AmpHourIntegrator::set_discharge_efficiency(float pct) {
   if (config_path_.length() > 0) {
     String key = config_path_;
     key.replace('/', '_');
-    Preferences prefs;
-    if (prefs.begin("battcfg", false)) {
-      prefs.putFloat((key + "_discharge").c_str(), calculator_.get_discharge_efficiency());
-      prefs.end();
+    if (storage_.begin("battcfg", false)) {
+      storage_.putFloat((key + "_discharge").c_str(), calculator_.get_discharge_efficiency());
+      storage_.end();
     }
   }
 }

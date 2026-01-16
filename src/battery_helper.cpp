@@ -9,7 +9,7 @@
 namespace sensesp {
 
 void setupBatterySensor(ISensor& sensor, unsigned int read_interval,
-                        const BatteryConfig& config) {
+                        const BatteryConfig& config, IStorageProvider& storage) {
     // Initialize sensor hardware
     if (!sensor.begin()) {
       while (1) {
@@ -31,7 +31,8 @@ void setupBatterySensor(ISensor& sensor, unsigned int read_interval,
     // Use a short config key (chip_name) for NVS persistence so keys stay within NVS limits
     auto* ah_integ = new AmpHourIntegrator(String(config.chip_name()), 
                                            config.initial_ah(), 
-                                           config.marked_capacity_ah());
+                                           config.marked_capacity_ah(),
+                                           storage);
     current_sensor->connect_to(ah_integ);
     
     // Sample Ah from integrator at 1 Hz for Signal K output (decoupled from 100 Hz integration)

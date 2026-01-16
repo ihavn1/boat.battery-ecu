@@ -3,6 +3,7 @@
 #include "sensesp/transforms/transform.h"
 #include "sensesp_base_app.h"
 #include "ah_calculator.h"
+#include "storage/i_storage_provider.h"
 
 namespace sensesp {
 
@@ -23,10 +24,13 @@ namespace sensesp {
 // Exposes Ah to consumers at their own polling rate (e.g., Signal K output).
 class AmpHourIntegrator : public FloatTransform {
  public:
-  // config_path is unused for now but kept for consistency with other transforms
-  // battery_capacity_ah: capacity in Ah, used to clamp Ah between 0 and capacity
-  explicit AmpHourIntegrator(const String& config_path = "", float initial_ah = 0.0f, 
-                             float battery_capacity_ah = 0.0f);
+  // config_path: NVS key prefix for persisting state
+  // initial_ah: Starting Ah value
+  // battery_capacity_ah: Capacity in Ah, used to clamp Ah between 0 and capacity
+  // storage: Storage backend for persisting configuration and state
+  explicit AmpHourIntegrator(const String& config_path, float initial_ah, 
+                             float battery_capacity_ah,
+                             IStorageProvider& storage);
 
   void set(const float& new_value) override;
 
@@ -55,6 +59,7 @@ class AmpHourIntegrator : public FloatTransform {
   unsigned long last_update_ms_ = 0;
   double current_a_ = 0.0;  // Most recent current reading (A)
   String config_path_;      // NVS key prefix
+  IStorageProvider& storage_;  // Storage backend
   
   // Persistence tracking
   bool ah_dirty_ = false;

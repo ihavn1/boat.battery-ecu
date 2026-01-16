@@ -10,6 +10,7 @@
 #include "INA226.h"
 #include "sensors/ina226_sensor.h"
 #include "battery_config.h"
+#include "storage/nvs_storage_provider.h"
 #include "sensesp_onewire/onewire_temperature.h"
 
 using namespace sensesp;
@@ -52,6 +53,9 @@ void setup()
     INA226Sensor houseSensor(HouseBatteryINA, 0.0075F, 0.250F, INA226_256_SAMPLES);
     INA226Sensor starterSensor(StarterBatteryINA, 0.0075F, 0.250F, INA226_256_SAMPLES);
 
+    // Create storage provider for persistent configuration
+    NVSStorageProvider storage;
+
     // Battery configurations
     BatteryConfig houseConfig(
         "House Battery",
@@ -78,10 +82,10 @@ void setup()
     );
 
     // -------------- House Battery Voltage and current -----------------------
-    setupBatterySensor(houseSensor, read_interval, houseConfig);
+    setupBatterySensor(houseSensor, read_interval, houseConfig, storage);
 
     // -------------- Starter Battery Voltage and current -----------------------
-    setupBatterySensor(starterSensor, read_interval, starterConfig);
+    setupBatterySensor(starterSensor, read_interval, starterConfig, storage);
 
     // ############ Battery temperature sensors ##########
     constexpr uint8_t pin = ONEWIRE_PIN;

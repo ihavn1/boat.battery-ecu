@@ -3,6 +3,7 @@
 
 #include "sensors/i_sensor.h"
 #include "battery_config.h"
+#include "storage/i_storage_provider.h"
 
 namespace sensesp {
 
@@ -15,8 +16,9 @@ namespace sensesp {
  * @param sensor Sensor implementation (INA226, INA219, etc.)
  * @param read_interval Sensor read interval in milliseconds
  * @param config Battery configuration (paths, capacity, etc.)
+ * @param storage Storage backend for persisting state
  */
 void setupBatterySensor(ISensor& sensor, unsigned int read_interval,
-                        const BatteryConfig& config);
+                        const BatteryConfig& config, IStorageProvider& storage);
 
 }  // namespace sensesp
