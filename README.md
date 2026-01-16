@@ -1,1 +1,1 @@
-"# boat-batterysensors" 
+"# boat.battery-controller" 
