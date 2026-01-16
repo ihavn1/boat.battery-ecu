@@ -1,0 +1,169 @@
+#pragma once
+
+#include <Arduino.h>
+#include "battery_config.h"
+#include "ah_calculator.h"
+
+namespace sensesp {
+
+/**
+ * @brief Battery domain model encapsulating state and behavior
+ * 
+ * Represents a single battery with its state (voltage, current, Ah, SOC)
+ * and behavior (charging, discharging, SOC calculation). Follows the
+ * Single Responsibility Principle by focusing only on battery domain logic,
+ * delegating persistence to storage providers and sensor reading to sensors.
+ * 
+ * This class is the core domain model, free from infrastructure concerns
+ * like Signal K, sensors, or persistence mechanisms.
+ */
+class Battery {
+ public:
+  /**
+   * @brief Construct a battery with configuration
+   * @param config Battery configuration (name, capacity, paths)
+   */
+  explicit Battery(const BatteryConfig& config)
+      : config_(config),
+        calculator_(config.initial_ah(), config.marked_capacity_ah()),
+        voltage_(0.0f),
+        current_(0.0f),
+        power_(0.0f),
+        temperature_(20.0f) {}
+
+  // Configuration accessors
+  const BatteryConfig& config() const { return config_; }
+  const char* name() const { return config_.name(); }
+  const char* chip_name() const { return config_.chip_name(); }
+
+  // State accessors
+  float voltage() const { return voltage_; }
+  float current() const { return current_; }
+  float power() const { return power_; }
+  float temperature() const { return temperature_; }
+  
+  double ah() const { return calculator_.get_ah(); }
+  float soc() const { return calculator_.calculate_soc(); }
+  
+  float marked_capacity_ah() const { return calculator_.get_marked_capacity_ah(); }
+  float current_capacity_ah() const { return calculator_.get_current_capacity_ah(); }
+  
+  float charge_efficiency() const { return calculator_.get_charge_efficiency(); }
+  float discharge_efficiency() const { return calculator_.get_discharge_efficiency(); }
+
+  // State mutators
+  void set_voltage(float v) { voltage_ = v; }
+  void set_current(float a) { current_ = a; }
+  void set_power(float w) { power_ = w; }
+  void set_temperature(float c) { temperature_ = c; }
+  
+  void set_ah(double ah) { calculator_.set_ah(ah); }
+  void set_marked_capacity_ah(float capacity_ah) { 
+    calculator_.set_marked_capacity_ah(capacity_ah); 
+  }
+  void set_current_capacity_ah(float capacity_ah) { 
+    calculator_.set_current_capacity_ah(capacity_ah); 
+  }
+  
+  void set_charge_efficiency(float pct) { 
+    calculator_.set_charge_efficiency(pct); 
+  }
+  void set_discharge_efficiency(float pct) { 
+    calculator_.set_discharge_efficiency(pct); 
+  }
+
+  // Domain behavior
+  
+  /**
+   * @brief Update battery state with sensor readings
+   * @param voltage_v Voltage in volts
+   * @param current_a Current in amperes (positive = charging, negative = discharging)
+   * @param power_w Power in watts
+   */
+  void update_readings(float voltage_v, float current_a, float power_w) {
+    voltage_ = voltage_v;
+    current_ = current_a;
+    power_ = power_w;
+  }
+
+  /**
+   * @brief Integrate current over time to update Ah
+   * @param current_a Current in amperes
+   * @param dt_ms Time delta in milliseconds
+   */
+  void integrate_current(float current_a, unsigned long dt_ms) {
+    calculator_.integrate_current(current_a, dt_ms);
+  }
+
+  /**
+   * @brief Check if battery is charging
+   * @return true if current > 0
+   */
+  bool is_charging() const {
+    return current_ > 0.0f;
+  }
+
+  /**
+   * @brief Check if battery is discharging
+   * @return true if current < 0
+   */
+  bool is_discharging() const {
+    return current_ < 0.0f;
+  }
+
+  /**
+   * @brief Check if battery state has changed significantly
+   * @param previous_ah Previous Ah value to compare against
+   * @param threshold Threshold for significant change (default 0.5 Ah)
+   * @return true if change is significant
+   */
+  bool has_ah_changed_significantly(double previous_ah, double threshold = 0.5) const {
+    return calculator_.has_changed_significantly(previous_ah, threshold);
+  }
+
+  /**
+   * @brief Check if battery is fully charged
+   * @return true if SOC >= 99%
+   */
+  bool is_fully_charged() const {
+    return soc() >= 99.0f;
+  }
+
+  /**
+   * @brief Check if battery is empty
+   * @return true if SOC <= 1%
+   */
+  bool is_empty() const {
+    return soc() <= 1.0f;
+  }
+
+  /**
+   * @brief Check if battery is critically low
+   * @return true if SOC <= 20%
+   */
+  bool is_critically_low() const {
+    return soc() <= 20.0f;
+  }
+
+  /**
+   * @brief Get battery health percentage
+   * @return Health percentage (current capacity / marked capacity * 100)
+   */
+  float health_percentage() const {
+    float marked = marked_capacity_ah();
+    if (marked <= 0.0f) return 100.0f;
+    return (current_capacity_ah() / marked) * 100.0f;
+  }
+
+ private:
+  const BatteryConfig& config_;
+  AmpHourCalculator calculator_;
+  
+  // Sensor readings
+  float voltage_;      // Volts
+  float current_;      // Amperes (positive = charging, negative = discharging)
+  float power_;        // Watts
+  float temperature_;  // Celsius
+};
+
+}  // namespace sensesp

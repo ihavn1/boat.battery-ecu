@@ -1,15 +1,16 @@
 #include <Arduino.h>
 #include "battery_helper.h"
-#include "ah_integrator.h"
+#include "battery.h"
+#include "battery_monitor.h"
 #include "sensesp/signalk/signalk_output.h"
 #include "sensesp/signalk/signalk_put_request_listener.h"
 #include "sensesp/sensors/sensor.h"
-#include "sensesp/transforms/linear.h"
+#include "sensesp_app.h"
 
 namespace sensesp {
 
-void setupBatterySensor(ISensor& sensor, unsigned int read_interval,
-                        const BatteryConfig& config, IStorageProvider& storage) {
+BatteryMonitor* setupBatterySensor(ISensor& sensor, unsigned int read_interval,
+                                   const BatteryConfig& config, IStorageProvider& storage) {
     // Initialize sensor hardware
     if (!sensor.begin()) {
       while (1) {
@@ -17,54 +18,75 @@ void setupBatterySensor(ISensor& sensor, unsigned int read_interval,
       }
     }
 
-    auto* voltage_sensor = new RepeatSensor<float>(read_interval, [&sensor]() { return sensor.getBusVoltage(); });
+    // Create Battery domain object and BatteryMonitor orchestrator
+    auto* battery = new Battery(config);
+    auto* monitor = new BatteryMonitor(*battery, sensor, storage);
+
+    // Voltage sensor - read and publish to Signal K
+    auto* voltage_sensor = new RepeatSensor<float>(read_interval, [battery]() { 
+        return battery->voltage(); 
+    });
     voltage_sensor->connect_to(
         new SKOutputFloat(config.voltage_path(), "", new SKMetadata("V", "Voltage")));
 
-    auto* current_sensor = new RepeatSensor<float>(read_interval, [&sensor]() { return sensor.getCurrent(); });
+    // Current sensor - read and publish to Signal K
+    auto* current_sensor = new RepeatSensor<float>(read_interval, [battery]() { 
+        return battery->current(); 
+    });
     current_sensor->connect_to(
         new SKOutputFloat(config.current_path(), "", new SKMetadata("A", "Amps")));
 
-    // Amp-hour integrator: integrate current over time at 100 Hz to produce Ah
-    // Pass battery capacity so Ah is clamped between 0 and capacity
-    // Initial Ah is set from config (typically full capacity at startup)
-    // Use a short config key (chip_name) for NVS persistence so keys stay within NVS limits
-    auto* ah_integ = new AmpHourIntegrator(String(config.chip_name()), 
-                                           config.initial_ah(), 
-                                           config.marked_capacity_ah(),
-                                           storage);
-    current_sensor->connect_to(ah_integ);
+    // Power sensor - read and publish to Signal K
+    auto* power_sensor = new RepeatSensor<float>(read_interval, [battery]() { 
+        return battery->power(); 
+    });
+    power_sensor->connect_to(
+        new SKOutputFloat(config.power_path(), "", new SKMetadata("W", "Watts")));
+
+    // Update battery readings from sensor at configured interval
+    sensesp_app->get_event_loop()->onRepeat(read_interval, [monitor]() {
+        monitor->update_readings();
+    });
+
+    // Integrate current to update Ah at 1Hz
+    sensesp_app->get_event_loop()->onRepeat(1000, [monitor]() {
+        monitor->integrate();
+    });
+
+    // Amp-hour output - sample and publish to Signal K
+    auto* ah_sensor = new RepeatSensor<float>(1000, [battery]() { 
+        return battery->ah(); 
+    });
+    ah_sensor->connect_to(
+        new SKOutputFloat(config.ah_path(), "", new SKMetadata("Ah", "Ampere hours")));
     
-    // Sample Ah from integrator at 1 Hz for Signal K output (decoupled from 100 Hz integration)
-    auto* ah_sk_sampler = new RepeatSensor<float>(1000, [ah_integ]() { return ah_integ->get_ah(); });
-    ah_sk_sampler->connect_to(new SKOutputFloat(config.ah_path(), "", new SKMetadata("Ah", "Ampere hours")));
-    
-    // Convert Ah to State of Charge percentage (0-100%)
-    // SOC% = (Ah / Current Capacity) * 100
-    // Uses a custom consumer that recalculates based on dynamic capacity
-    class SocPercentConsumer : public ValueConsumer<float> {
-     public:
-      SocPercentConsumer(AmpHourIntegrator* integ, const char* soc_path) : integ_(integ) {
-        output_ = new SKOutputFloat(soc_path, "", new SKMetadata("ratio", "State of Charge"));
-      }
-      void set(const float& ah) override {
-        float capacity = integ_->get_current_capacity_ah();
-        float soc = (capacity > 0.0f) ? (ah / capacity) * 100.0f : 0.0f;
-        // Clamp to 0-100%
-        soc = constrain(soc, 0.0f, 100.0f);
-        output_->set_input(soc);
-      }
-     private:
-      AmpHourIntegrator* integ_;
-      SKOutputFloat* output_;
-    };
-    
-    auto* soc_consumer = new SocPercentConsumer(ah_integ, config.soc_path());
-    ah_sk_sampler->connect_to(soc_consumer);
+    // State of Charge percentage output
+    auto* soc_sensor = new RepeatSensor<float>(1000, [battery]() { 
+        return battery->soc(); 
+    });
+    soc_sensor->connect_to(
+        new SKOutputFloat(config.soc_path(), "", new SKMetadata("ratio", "State of Charge")));
+
+    // Persist state every 10 seconds if changed significantly
+    sensesp_app->get_event_loop()->onRepeat(10000, [monitor]() {
+        monitor->maybe_persist();
+    });
     
     // Signal K input to allow remote reset/calibration of Ah value
+    class AhConsumer : public ValueConsumer<float> {
+     public:
+      AhConsumer(Battery* bat, BatteryMonitor* mon) : battery_(bat), monitor_(mon) {}
+      void set(const float& new_value) override { 
+          battery_->set_ah(new_value);
+          monitor_->save_state();  // Persist immediately on manual set
+      }
+     private:
+      Battery* battery_;
+      BatteryMonitor* monitor_;
+    };
+    
     auto* ah_sk_input = new SKPutRequestListener<float>(config.ah_path());
-    ah_sk_input->connect_to(ah_integ);  // Connect to integrator's set_ah() method
+    ah_sk_input->connect_to(new AhConsumer(battery, monitor));
     
     // Signal K inputs for charge/discharge efficiency configuration
     String charge_eff_path = String(config.ah_path()) + "/chargeEfficiency";
@@ -72,80 +94,70 @@ void setupBatterySensor(ISensor& sensor, unsigned int read_interval,
     String capacity_path = String(config.ah_path()) + "/capacity";  // Current capacity (degrades)
     String marked_capacity_path = String(config.ah_path()) + "/markedCapacity";  // Nameplate capacity
     
-    // Create simple consumers that call the efficiency/ah/capacity setters
-    class AhConsumer : public ValueConsumer<float> {
-     public:
-      AhConsumer(AmpHourIntegrator* integ) : integ_(integ) {}
-      void set(const float& new_value) override { integ_->set_ah(new_value); }
-     private:
-      AmpHourIntegrator* integ_;
-    };
-    
-    class CurrentCapacityConsumer : public ValueConsumer<float> {
-     public:
-      CurrentCapacityConsumer(AmpHourIntegrator* integ) : integ_(integ) {}
-      void set(const float& new_value) override { integ_->set_current_capacity_ah(new_value); }
-     private:
-      AmpHourIntegrator* integ_;
-    };
-    
-    class MarkedCapacityConsumer : public ValueConsumer<float> {
-     public:
-      MarkedCapacityConsumer(AmpHourIntegrator* integ) : integ_(integ) {}
-      void set(const float& new_value) override { integ_->set_marked_capacity_ah(new_value); }
-     private:
-      AmpHourIntegrator* integ_;
-    };
-    
+    // Charge efficiency consumer
     class ChargeEfficiencyConsumer : public ValueConsumer<float> {
      public:
-      ChargeEfficiencyConsumer(AmpHourIntegrator* integ) : integ_(integ) {}
-      void set(const float& new_value) override { integ_->set_charge_efficiency(new_value); }
+      ChargeEfficiencyConsumer(Battery* bat, BatteryMonitor* mon) : battery_(bat), monitor_(mon) {}
+      void set(const float& new_value) override { 
+          battery_->set_charge_efficiency(new_value);
+          monitor_->save_state();
+      }
      private:
-      AmpHourIntegrator* integ_;
+      Battery* battery_;
+      BatteryMonitor* monitor_;
     };
     
+    // Discharge efficiency consumer
     class DischargeEfficiencyConsumer : public ValueConsumer<float> {
      public:
-      DischargeEfficiencyConsumer(AmpHourIntegrator* integ) : integ_(integ) {}
-      void set(const float& new_value) override { integ_->set_discharge_efficiency(new_value); }
+      DischargeEfficiencyConsumer(Battery* bat, BatteryMonitor* mon) : battery_(bat), monitor_(mon) {}
+      void set(const float& new_value) override { 
+          battery_->set_discharge_efficiency(new_value);
+          monitor_->save_state();
+      }
      private:
-      AmpHourIntegrator* integ_;
+      Battery* battery_;
+      BatteryMonitor* monitor_;
     };
     
-    // Re-wire Ah input to use the AhConsumer for proper clamping
-    ah_sk_input->connect_to(new AhConsumer(ah_integ));
+    // Current capacity consumer
+    class CurrentCapacityConsumer : public ValueConsumer<float> {
+     public:
+      CurrentCapacityConsumer(Battery* bat, BatteryMonitor* mon) : battery_(bat), monitor_(mon) {}
+      void set(const float& new_value) override { 
+          battery_->set_current_capacity_ah(new_value);
+          monitor_->save_state();
+      }
+     private:
+      Battery* battery_;
+      BatteryMonitor* monitor_;
+    };
+    
+    // Marked capacity consumer (read-only in practice, but exposed for completeness)
+    class MarkedCapacityConsumer : public ValueConsumer<float> {
+     public:
+      MarkedCapacityConsumer(Battery* bat) : battery_(bat) {}
+      void set(const float& new_value) override { 
+          // Marked capacity typically doesn't change, but allow it for testing
+          battery_->set_marked_capacity_ah(new_value);
+      }
+     private:
+      Battery* battery_;
+    };
     
     auto* charge_eff_input = new SKPutRequestListener<float>(charge_eff_path);
-    charge_eff_input->connect_to(new ChargeEfficiencyConsumer(ah_integ));
+    charge_eff_input->connect_to(new ChargeEfficiencyConsumer(battery, monitor));
     
     auto* discharge_eff_input = new SKPutRequestListener<float>(discharge_eff_path);
-    discharge_eff_input->connect_to(new DischargeEfficiencyConsumer(ah_integ));
+    discharge_eff_input->connect_to(new DischargeEfficiencyConsumer(battery, monitor));
     
     auto* current_capacity_input = new SKPutRequestListener<float>(capacity_path);
-    current_capacity_input->connect_to(new CurrentCapacityConsumer(ah_integ));
+    current_capacity_input->connect_to(new CurrentCapacityConsumer(battery, monitor));
     
     auto* marked_capacity_input = new SKPutRequestListener<float>(marked_capacity_path);
-    marked_capacity_input->connect_to(new MarkedCapacityConsumer(ah_integ));
+    marked_capacity_input->connect_to(new MarkedCapacityConsumer(battery));
 
-    auto* power_sensor = new RepeatSensor<float>(read_interval, [&sensor]() { return sensor.getPower(); });
-    power_sensor->connect_to(
-        new SKOutputFloat(config.power_path(), "", new SKMetadata("W", "Power")));
-    
-    // Expose charge/discharge efficiencies as Signal K outputs so the server
-    // publishes metadata and allows PUT requests to those paths.
-    auto* charge_eff_sampler = new RepeatSensor<float>(1000, [ah_integ]() { return ah_integ->get_charge_efficiency(); });
-    charge_eff_sampler->connect_to(new SKOutputFloat(charge_eff_path.c_str(), "", new SKMetadata("%", "Charge Efficiency")));
-
-    auto* discharge_eff_sampler = new RepeatSensor<float>(1000, [ah_integ]() { return ah_integ->get_discharge_efficiency(); });
-    discharge_eff_sampler->connect_to(new SKOutputFloat(discharge_eff_path.c_str(), "", new SKMetadata("%", "Discharge Efficiency")));
-    
-    // Expose battery capacities as readable Signal K outputs
-    auto* current_capacity_sampler = new RepeatSensor<float>(1000, [ah_integ]() { return ah_integ->get_current_capacity_ah(); });
-    current_capacity_sampler->connect_to(new SKOutputFloat(capacity_path, "", new SKMetadata("Ah", "Current Capacity")));
-    
-    auto* marked_capacity_sampler = new RepeatSensor<float>(1000, [ah_integ]() { return ah_integ->get_marked_capacity_ah(); });
-    marked_capacity_sampler->connect_to(new SKOutputFloat(marked_capacity_path, "", new SKMetadata("Ah", "Marked Capacity")));
+    return monitor;
 }
 
 }  // namespace sensesp

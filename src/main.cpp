@@ -10,6 +10,8 @@
 #include "INA226.h"
 #include "sensors/ina226_sensor.h"
 #include "battery_config.h"
+#include "battery_factory.h"
+#include "sensor_factory.h"
 #include "storage/nvs_storage_provider.h"
 #include "sensesp_onewire/onewire_temperature.h"
 
@@ -49,43 +51,22 @@ void setup()
     // Read the sensor every BATTERY_READ_INTERVAL_MS
     const unsigned int read_interval = BATTERY_READ_INTERVAL_MS;
 
-    // Create sensor wrappers with configuration
-    INA226Sensor houseSensor(HouseBatteryINA, 0.0075F, 0.250F, INA226_256_SAMPLES);
-    INA226Sensor starterSensor(StarterBatteryINA, 0.0075F, 0.250F, INA226_256_SAMPLES);
+    // Create sensor instances using factory
+    ISensor* houseSensor = SensorFactory::createHouseBatterySensor();
+    ISensor* starterSensor = SensorFactory::createStarterBatterySensor();
 
     // Create storage provider for persistent configuration
     NVSStorageProvider storage;
 
-    // Battery configurations
-    BatteryConfig houseConfig(
-        "House Battery",
-        "house",
-        HOUSE_BATTERY_CAPACITY_AH,
-        HOUSE_BATTERY_CAPACITY_AH,
-        "electrical.batteries.house.voltage",
-        "electrical.batteries.house.current",
-        "electrical.batteries.house.power",
-        "electrical.batteries.house.ah",
-        "electrical.batteries.house.stateOfCharge"
-    );
-
-    BatteryConfig starterConfig(
-        "Starter Battery",
-        "start",
-        STARTER_BATTERY_CAPACITY_AH,
-        STARTER_BATTERY_CAPACITY_AH,
-        "electrical.batteries.starter.voltage",
-        "electrical.batteries.starter.current",
-        "electrical.batteries.starter.power",
-        "electrical.batteries.starter.ah",
-        "electrical.batteries.starter.stateOfCharge"
-    );
+    // Create battery configurations using factory
+    Battery* houseBattery = BatteryFactory::createHouseBattery(HOUSE_BATTERY_CAPACITY_AH);
+    Battery* starterBattery = BatteryFactory::createStarterBattery(STARTER_BATTERY_CAPACITY_AH);
 
     // -------------- House Battery Voltage and current -----------------------
-    setupBatterySensor(houseSensor, read_interval, houseConfig, storage);
+    setupBatterySensor(*houseSensor, read_interval, houseBattery->config(), storage);
 
     // -------------- Starter Battery Voltage and current -----------------------
-    setupBatterySensor(starterSensor, read_interval, starterConfig, storage);
+    setupBatterySensor(*starterSensor, read_interval, starterBattery->config(), storage);
 
     // ############ Battery temperature sensors ##########
     constexpr uint8_t pin = ONEWIRE_PIN;
