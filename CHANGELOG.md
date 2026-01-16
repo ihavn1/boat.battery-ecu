@@ -1,6 +1,62 @@
 # Changelog
 
-## Unreleased - 2025-11-30
+## 2026-01-16 - SOLID Architecture Refactoring
+
+### Major Changes
+- **SOLID Principles**: Complete refactoring following Dependency Inversion, Single Responsibility, Open/Closed, Liskov Substitution, and Interface Segregation principles
+- **Domain-Driven Design**: Separated domain logic (Battery, AmpHourCalculator) from infrastructure (sensors, storage)
+- **Factory Patterns**: Added BatteryFactory and SensorFactory for object creation
+- **Orchestration Layer**: Created BatteryMonitor and TemperatureMonitor for coordinating infrastructure and domain
+
+### New Classes
+- `Battery` - Pure domain model with state and behavior (no framework dependencies)
+- `BatteryMonitor` - Orchestrates sensor reading, integration, and persistence
+- `TemperatureMonitor` - Temperature sensor orchestration with calibration
+- `BatteryFactory` - Creates Battery instances (house, starter, custom)
+- `SensorFactory` - Creates sensor instances (INA226, extensible for INA219, etc.)
+- `ISensor` - Sensor abstraction interface
+- `ITemperatureSensor` - Temperature sensor abstraction
+- `IStorageProvider` - Storage abstraction (NVS, EEPROM, file system)
+
+### Architecture Changes
+- Moved from direct AmpHourIntegrator usage to Battery + BatteryMonitor pattern
+- All hardware dependencies now injected via interfaces
+- Clean separation: Domain → Orchestration → Infrastructure
+- Event loop reactions replace manual timer management
+
+### Testing
+- Added 45 new tests (Battery: 23, BatteryMonitor: 9, TemperatureMonitor: 13)
+- Total: 171 tests, 100% passing
+- Comprehensive mock-based unit testing
+- Real-world scenario tests included
+
+### Code Quality
+- Removed dead global INA226 instances from main.cpp
+- Fixed critical bug: Static INA226 factory would reuse first instance for all sensors
+- Eliminated redundant variable assignments
+- Removed unused includes
+- Cleaned up inline comments
+- All 171 tests passing
+
+### Documentation
+- Updated README.md with SOLID architecture overview
+- Updated inline comments to reflect new architecture
+- Documented factory patterns and dependency injection
+- Added architecture diagrams and data flow
+
+### Breaking Changes
+- None - API remains compatible with existing Signal K paths
+- Internal refactoring only, external behavior unchanged
+
+### Notes
+- `ah_integrator.cpp/h` deleted (replaced by Battery + AmpHourCalculator)
+- All persistence still uses NVS with same keys
+- Signal K paths unchanged
+- Remote configuration via PUT requests unchanged
+
+---
+
+## 2025-11-30 - Immediate Ah Persistence
 
 - Persist Amp-hour (Ah) immediately when receiving an SK PUT for Ah. This complements
   the existing periodic/delta-based persistence to ensure manual resets/updates
