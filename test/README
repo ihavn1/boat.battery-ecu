@@ -1,11 +1,67 @@
+# Testing Guide for boat.battery-controller
 
-This directory is intended for PlatformIO Test Runner and project tests.
+This directory contains test cases for the ESP32 battery monitoring system.
 
-Unit Testing is a software testing method by which individual units of
-source code, sets of one or more MCU program modules together with associated
-control data, usage procedures, and operating procedures, are tested to
-determine whether they are fit for use. Unit testing finds problems early
-in the development cycle.
+## Test Organization
 
-More information about PlatformIO Unit Testing:
-- https://docs.platformio.org/en/latest/advanced/unit-testing/index.html
+Tests are organized by component:
+- `test_ah_integrator/` - AmpHourIntegrator functionality (27 tests)
+- `test_battery_helper/` - SOC calculation logic (11 tests) 
+- `test_ina226_config/` - INA226 sensor configuration (13 tests)
+- `test_signal_k/` - Signal K paths and NVS keys (23 tests)
+- `test_onewire/` - Temperature sensor config (7 tests)
+
+## Running Tests
+
+**Note:** Due to SensESP framework dependencies, these tests currently serve as:
+1. **Documentation** of expected behavior and edge cases
+2. **Reference** for manual verification procedures
+3. **Validation specs** for future refactoring
+
+### Manual Testing Checklist
+
+**AmpHourIntegrator Tests:**
+```bash
+# Build and upload firmware
+pio run --target upload
+
+# Monitor serial output
+pio device monitor
+
+# Manual test procedures:
+# 1. Verify Ah clamping: Use Signal K PUT to set Ah > capacity, verify it clamps
+# 2. Verify Ah persistence: Set Ah via SK PUT, reboot ESP32, check value persists
+# 3. Verify efficiency: Set charge/discharge efficiency, monitor integration
+# 4. Verify capacity management: Update current capacity, check SOC recalculates
+```
+
+**Signal K Integration Tests:**
+```bash
+# Test SK PUT requests from Node-RED or curl:
+curl -X PUT http://<SIGNALK>:3000/signalk/v1/api/vessels/self/electrical/batteries/house/ah \
+  -H "Content-Type: application/json" \
+  -d '{"value": 180.5}'
+
+# Verify response and check updated value in Signal K
+```
+
+**NVS Persistence Tests:**
+```bash
+# Set values via Signal K
+# Restart ESP32
+# Verify values persist after boot
+```
+
+## Future: Automated Testing
+
+To enable automated unit tests, the codebase would need:
+1. Dependency injection for SensESP components
+2. Mock objects for hardware (INA226, OneWire, Preferences)
+3. Native test environment configuration
+
+For now, use the test files as comprehensive documentation of expected behavior.
+
+## More Information
+
+- PlatformIO Unit Testing: https://docs.platformio.org/en/latest/advanced/unit-testing/index.html
+- Unity Test Framework: http://www.throwtheswitch.org/unity
