@@ -98,10 +98,10 @@ curl -X PUT http://localhost:3000/signalk/v1/api/vessels/self/electrical/batteri
 curl -X PUT http://localhost:3000/signalk/v1/api/vessels/self/electrical/batteries/house/ah \
   -H "Content-Type: application/json" -d '{"value": 160.0}'
 
-# Check SOC (should be 100%)
+# Check SOC (should be 1.0)
 curl http://localhost:3000/signalk/v1/api/vessels/self/electrical/batteries/house/stateOfCharge
 
-# Expected: SOC = 100% (160Ah / 160Ah capacity)
+# Expected: SOC = 1.0 (100% as ratio: 160Ah / 160Ah capacity)
 
 # Try to set Ah above new capacity (should clamp to 160)
 curl -X PUT http://localhost:3000/signalk/v1/api/vessels/self/electrical/batteries/house/ah \
@@ -139,22 +139,22 @@ curl -X PUT http://localhost:3000/signalk/v1/api/vessels/self/electrical/batteri
 # Check SOC
 curl http://localhost:3000/signalk/v1/api/vessels/self/electrical/batteries/house/stateOfCharge
 
-# Expected: SOC = 50% (100Ah / 200Ah)
+# Expected: SOC = 0.5 (50% as ratio: 100Ah / 200Ah)
 
 # Test at full capacity
 curl -X PUT http://localhost:3000/signalk/v1/api/vessels/self/electrical/batteries/house/ah \
   -H "Content-Type: application/json" -d '{"value": 200.0}'
 
-# Expected: SOC = 100%
+# Expected: SOC = 1.0 (100% as ratio)
 
 # Test at empty
 curl -X PUT http://localhost:3000/signalk/v1/api/vessels/self/electrical/batteries/house/ah \
   -H "Content-Type: application/json" -d '{"value": 0.0}'
 
-# Expected: SOC = 0%
+# Expected: SOC = 0.0 (0% as ratio)
 ```
 
-**Pass Criteria:** SOC formula `(Ah / Capacity) × 100` works correctly
+**Pass Criteria:** SOC sent to Signal K as ratio (0-1), internal calculation `(Ah / Capacity) × 100 / 100`
 
 ---
 

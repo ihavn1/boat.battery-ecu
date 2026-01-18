@@ -4,7 +4,9 @@
 // ============================================================================
 // SOC (State of Charge) Calculation Tests
 // ============================================================================
-// Tests the SOC% = (Ah / Current Capacity) * 100 formula used in battery_helper.cpp
+// Tests the internal SOC calculation: (Ah / Current Capacity) * 100
+// Returns percentage (0-100%) for domain model usage
+// Note: Signal K output converts this to ratio (0-1) by dividing by 100
 
 void test_soc_at_full_capacity(void) {
     float ah = 200.0f;

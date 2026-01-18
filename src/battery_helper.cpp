@@ -31,7 +31,7 @@ namespace sensesp {
  * Signal K outputs:
  * - voltage, current, power (raw sensor readings)
  * - ah (integrated amp-hours)
- * - soc (state of charge percentage)
+ * - soc (state of charge as ratio 0-1, converted from internal percentage 0-100%)
  * 
  * Signal K inputs (PUT requests):
  * - ah - Set Ah value (persists immediately)
@@ -115,9 +115,10 @@ BatteryMonitor* setupBatterySensor(ISensor& sensor, unsigned int read_interval,
     ah_sensor->connect_to(
         new SKOutputFloat(config.ah_path(), "", new SKMetadata("Ah", "Ampere hours")));
     
-    // State of Charge (SOC) percentage output (0-100%)
+    // State of Charge (SOC) as ratio (0-1 for Signal K standard)
+    // Battery SOC is calculated as 0-100%, converted to 0-1 ratio here
     auto* soc_sensor = new RepeatSensor<float>(1000, [battery]() { 
-        return battery->soc(); 
+        return battery->soc() / 100.0f; 
     });
     soc_sensor->connect_to(
         new SKOutputFloat(config.soc_path(), "", new SKMetadata("ratio", "State of Charge")));

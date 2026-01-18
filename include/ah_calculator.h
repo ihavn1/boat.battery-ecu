@@ -69,7 +69,8 @@ class AmpHourCalculator {
     marked_capacity_ah_ = constrain(capacity, 0.1f, 10000.0f);
   }
 
-  // SOC calculation
+  // SOC calculation - returns percentage (0-100%)
+  // For Signal K ratio (0-1), divide result by 100
   float calculate_soc() const {
     if (capacity_ah_ <= 0) return 0.0f;
     float soc = (static_cast<float>(ah_) / capacity_ah_) * 100.0f;

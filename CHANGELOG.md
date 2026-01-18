@@ -1,5 +1,22 @@
 # Changelog
 
+## 2026-01-18 - Signal K SOC Format Correction
+
+### Changed
+- **SOC Output**: SOC is now correctly sent to Signal K as a ratio (0-1) per Signal K specification
+  - Internal calculation still returns percentage (0-100%) for domain logic
+  - Conversion `battery->soc() / 100.0f` applied in Signal K output layer
+  - Updated all documentation to reflect this distinction
+  - Test procedures now expect ratio values (e.g., 0.5 instead of 50%)
+
+### Documentation Updates
+- README.md: Clarified SOC sent as ratio to Signal K
+- .github/copilot-instructions.md: Added SOC conversion example in data pipeline
+- MANUAL_TEST_PROCEDURES.md: Updated expected values to ratios
+- include/battery.h: Added comments clarifying percentage vs ratio
+- include/ah_calculator.h: Documented that calculate_soc() returns percentage
+- test/test_battery_helper/test_soc_calculation.cpp: Added note about Signal K conversion
+
 ## 2026-01-16 - SOLID Architecture Refactoring
 
 ### Major Changes

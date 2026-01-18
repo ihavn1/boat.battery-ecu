@@ -16,6 +16,9 @@ namespace sensesp {
  * 
  * This class is the core domain model, free from infrastructure concerns
  * like Signal K, sensors, or persistence mechanisms.
+ * 
+ * Note: SOC is calculated as percentage (0-100%) for internal use.
+ * Signal K output converts to ratio (0-1) by dividing by 100.
  */
 class Battery {
  public:
@@ -43,6 +46,7 @@ class Battery {
   float temperature() const { return temperature_; }
   
   double ah() const { return calculator_.get_ah(); }
+  // Returns SOC as percentage (0-100%). For Signal K, divide by 100 to get ratio (0-1)
   float soc() const { return calculator_.calculate_soc(); }
   
   float marked_capacity_ah() const { return calculator_.get_marked_capacity_ah(); }

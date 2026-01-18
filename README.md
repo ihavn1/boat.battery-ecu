@@ -56,7 +56,7 @@ INA226 Hardware → ISensor → BatteryMonitor → Battery (domain)
 ### Battery Monitoring
 - ✅ Voltage, current, power measurement at 1Hz
 - ✅ Amp-hour (Ah) integration with efficiency compensation
-- ✅ State of Charge (SOC) calculation (0-100%)
+- ✅ State of Charge (SOC) calculation (sent to Signal K as 0-1 ratio)
 - ✅ Battery health tracking (capacity degradation)
 - ✅ Persistent state across reboots (NVS storage)
 
@@ -111,7 +111,7 @@ pio test -e az-delivery-devkit-v4 --filter test_battery
 - `electrical.batteries.house.current` - House battery current (A, + charging, - discharging)
 - `electrical.batteries.house.power` - House battery power (W)
 - `electrical.batteries.house.ah` - House battery amp-hours (Ah)
-- `electrical.batteries.house.stateOfCharge` - House battery SOC (%)
+- `electrical.batteries.house.stateOfCharge` - House battery SOC (ratio 0-1, per Signal K spec)
 - `electrical.batteries.house.temperature` - House battery temperature (°C)
 - (Similar paths for `starter` battery)
 
