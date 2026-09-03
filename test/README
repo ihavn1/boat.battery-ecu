@@ -1,11 +1,11 @@
-# Testing Guide for boat.battery-controller
+# Testing Guide for boat.battery-ecu
 
 This directory contains test cases for the ESP32 battery monitoring system.
 
 ## Test Organization
 
 Tests are organized by component:
-- `test_ah_integrator/` - AmpHourIntegrator functionality (27 tests)
+- `test_calculator/` - AmpHourCalculator functionality (27 tests)
 - `test_battery_helper/` - SOC calculation logic (11 tests) 
 - `test_ina226_config/` - INA226 sensor configuration (13 tests)
 - `test_signal_k/` - Signal K paths and NVS keys (23 tests)
@@ -20,7 +20,7 @@ Tests are organized by component:
 
 ### Manual Testing Checklist
 
-**AmpHourIntegrator Tests:**
+**AmpHourCalculator Tests:**
 ```bash
 # Build and upload firmware
 pio run --target upload
