@@ -4,7 +4,20 @@
 #include "battery_config.h"
 #include "ah_calculator.h"
 
+#if defined(ARDUINO_ARCH_ESP32)
+#include <freertos/FreeRTOS.h>
+#include <freertos/semphr.h>
+#endif
+
 namespace sensesp {
+
+struct BatteryStateSnapshot {
+  double ah;
+  float marked_capacity_ah;
+  float current_capacity_ah;
+  float charge_efficiency;
+  float discharge_efficiency;
+};
 
 /**
  * @brief Battery domain model encapsulating state and behavior
@@ -32,7 +45,17 @@ class Battery {
         voltage_(0.0f),
         current_(0.0f),
         power_(0.0f),
-        temperature_(20.0f) {}
+        temperature_(20.0f)
+#if defined(ARDUINO_ARCH_ESP32)
+        , state_mutex_(xSemaphoreCreateMutex())
+#endif
+  {}
+
+  ~Battery() {
+#if defined(ARDUINO_ARCH_ESP32)
+    vSemaphoreDelete(state_mutex_);
+#endif
+  }
 
   // Configuration accessors
   const BatteryConfig& config() const { return config_; }
@@ -40,39 +63,50 @@ class Battery {
   const char* chip_name() const { return config_.chip_name(); }
 
   // State accessors
-  float voltage() const { return voltage_; }
-  float current() const { return current_; }
-  float power() const { return power_; }
-  float temperature() const { return temperature_; }
+  float voltage() const { Lock lock(*this); return voltage_; }
+  float current() const { Lock lock(*this); return current_; }
+  float power() const { Lock lock(*this); return power_; }
+  float temperature() const { Lock lock(*this); return temperature_; }
   
-  double ah() const { return calculator_.get_ah(); }
+  double ah() const { Lock lock(*this); return calculator_.get_ah(); }
   // Returns SOC as percentage (0-100%). For Signal K, divide by 100 to get ratio (0-1)
-  float soc() const { return calculator_.calculate_soc(); }
+  float soc() const { Lock lock(*this); return calculator_.calculate_soc(); }
   
-  float marked_capacity_ah() const { return calculator_.get_marked_capacity_ah(); }
-  float current_capacity_ah() const { return calculator_.get_current_capacity_ah(); }
+  float marked_capacity_ah() const { Lock lock(*this); return calculator_.get_marked_capacity_ah(); }
+  float current_capacity_ah() const { Lock lock(*this); return calculator_.get_current_capacity_ah(); }
   
-  float charge_efficiency() const { return calculator_.get_charge_efficiency(); }
-  float discharge_efficiency() const { return calculator_.get_discharge_efficiency(); }
+  float charge_efficiency() const { Lock lock(*this); return calculator_.get_charge_efficiency(); }
+  float discharge_efficiency() const { Lock lock(*this); return calculator_.get_discharge_efficiency(); }
+
+  BatteryStateSnapshot snapshot() const {
+    Lock lock(*this);
+    return {calculator_.get_ah(), calculator_.get_marked_capacity_ah(),
+            calculator_.get_current_capacity_ah(), calculator_.get_charge_efficiency(),
+            calculator_.get_discharge_efficiency()};
+  }
 
   // State mutators
-  void set_voltage(float v) { voltage_ = v; }
-  void set_current(float a) { current_ = a; }
-  void set_power(float w) { power_ = w; }
-  void set_temperature(float c) { temperature_ = c; }
+  void set_voltage(float v) { Lock lock(*this); voltage_ = v; }
+  void set_current(float a) { Lock lock(*this); current_ = a; }
+  void set_power(float w) { Lock lock(*this); power_ = w; }
+  void set_temperature(float c) { Lock lock(*this); temperature_ = c; }
   
-  void set_ah(double ah) { calculator_.set_ah(ah); }
+  void set_ah(double ah) { Lock lock(*this); calculator_.set_ah(ah); }
   void set_marked_capacity_ah(float capacity_ah) { 
+    Lock lock(*this);
     calculator_.set_marked_capacity_ah(capacity_ah); 
   }
   void set_current_capacity_ah(float capacity_ah) { 
+    Lock lock(*this);
     calculator_.set_current_capacity_ah(capacity_ah); 
   }
   
   void set_charge_efficiency(float pct) { 
+    Lock lock(*this);
     calculator_.set_charge_efficiency(pct); 
   }
   void set_discharge_efficiency(float pct) { 
+    Lock lock(*this);
     calculator_.set_discharge_efficiency(pct); 
   }
 
@@ -85,6 +119,7 @@ class Battery {
    * @param power_w Power in watts
    */
   void update_readings(float voltage_v, float current_a, float power_w) {
+    Lock lock(*this);
     voltage_ = voltage_v;
     current_ = current_a;
     power_ = power_w;
@@ -96,6 +131,7 @@ class Battery {
    * @param dt_ms Time delta in milliseconds
    */
   void integrate_current(float current_a, unsigned long dt_ms) {
+    Lock lock(*this);
     calculator_.integrate_current(current_a, dt_ms);
   }
 
@@ -104,6 +140,7 @@ class Battery {
    * @return true if current > 0
    */
   bool is_charging() const {
+    Lock lock(*this);
     return current_ > 0.0f;
   }
 
@@ -112,6 +149,7 @@ class Battery {
    * @return true if current < 0
    */
   bool is_discharging() const {
+    Lock lock(*this);
     return current_ < 0.0f;
   }
 
@@ -122,6 +160,7 @@ class Battery {
    * @return true if change is significant
    */
   bool has_ah_changed_significantly(double previous_ah, double threshold = 0.5) const {
+    Lock lock(*this);
     return calculator_.has_changed_significantly(previous_ah, threshold);
   }
 
@@ -160,6 +199,22 @@ class Battery {
   }
 
  private:
+  class Lock {
+   public:
+    explicit Lock(const Battery& battery) : battery_(battery) {
+#if defined(ARDUINO_ARCH_ESP32)
+      xSemaphoreTake(battery_.state_mutex_, portMAX_DELAY);
+#endif
+    }
+    ~Lock() {
+#if defined(ARDUINO_ARCH_ESP32)
+      xSemaphoreGive(battery_.state_mutex_);
+#endif
+    }
+   private:
+    const Battery& battery_;
+  };
+
   const BatteryConfig& config_;
   AmpHourCalculator calculator_;
   
@@ -168,6 +223,9 @@ class Battery {
   float current_;      // Amperes (positive = charging, negative = discharging)
   float power_;        // Watts
   float temperature_;  // Celsius
+#if defined(ARDUINO_ARCH_ESP32)
+  SemaphoreHandle_t state_mutex_;
+#endif
 };
 
 }  // namespace sensesp

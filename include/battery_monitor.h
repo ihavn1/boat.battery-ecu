@@ -112,16 +112,17 @@ class BatteryMonitor {
    */
   bool save_state() {
     String key_prefix = String(battery_.chip_name());
+    BatteryStateSnapshot snapshot = battery_.snapshot();
     
     if (!storage_.begin("battcfg", false)) {
       return false;
     }
     
-    storage_.putFloat((key_prefix + "_ah").c_str(), (float)battery_.ah());
-    storage_.putFloat((key_prefix + "_marked").c_str(), battery_.marked_capacity_ah());
-    storage_.putFloat((key_prefix + "_current").c_str(), battery_.current_capacity_ah());
-    storage_.putFloat((key_prefix + "_charge").c_str(), battery_.charge_efficiency());
-    storage_.putFloat((key_prefix + "_discharge").c_str(), battery_.discharge_efficiency());
+    storage_.putFloat((key_prefix + "_ah").c_str(), (float)snapshot.ah);
+    storage_.putFloat((key_prefix + "_marked").c_str(), snapshot.marked_capacity_ah);
+    storage_.putFloat((key_prefix + "_current").c_str(), snapshot.current_capacity_ah);
+    storage_.putFloat((key_prefix + "_charge").c_str(), snapshot.charge_efficiency);
+    storage_.putFloat((key_prefix + "_discharge").c_str(), snapshot.discharge_efficiency);
     
     storage_.end();
     return true;
