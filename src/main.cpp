@@ -38,7 +38,7 @@ void setup()
     // This initializes WiFi, web server, Signal K client, etc.
     SensESPAppBuilder builder;
     sensesp_app = builder
-                      .set_hostname("battery-sensors")
+                      .set_hostname("battery-ecu")
                       ->get_app();
 
     // Initialize I2C bus for INA226 sensors
