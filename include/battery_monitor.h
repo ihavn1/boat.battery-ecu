@@ -77,13 +77,13 @@ class BatteryMonitor {
 
   /**
    * @brief Persist battery state if changed significantly
-   * Should be called periodically (e.g., every 5 seconds)
+   * Should be called periodically (e.g., every hour)
    * 
    * @param force Force persistence regardless of change threshold
-   * @param min_interval_ms Minimum time between persists (default 10 seconds)
+   * @param min_interval_ms Minimum time between persists (default 1 hour)
    * @param change_threshold Ah change threshold for persistence (default 0.5 Ah)
    */
-  void maybe_persist(bool force = false, unsigned long min_interval_ms = 10000, 
+  void maybe_persist(bool force = false, unsigned long min_interval_ms = 3600000, 
                      double change_threshold = 0.5) {
     unsigned long now = millis();
     

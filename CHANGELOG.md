@@ -1,5 +1,20 @@
 # Changelog
 
+## 2026-09-04 - GPIO27 Emergency Shutdown Persistence
+
+### Added
+- **ShutdownCoordinator** (`include/shutdown_coordinator.h`) - Header-only, framework-free logic that debounces a low signal, persists both house and starter `BatteryMonitor` state, and only then requests deep sleep. Ported from the `boat.engine-ecu` shutdown pattern.
+- **ShutdownMonitor** (`include/shutdown_monitor.h`, `src/shutdown_monitor.cpp`) - ISR + dedicated FreeRTOS task on GPIO27 (FALLING edge). Stops WiFi before saving to free up CPU during the ~500ms window before power is cut. Uses plain `INPUT` (no internal pull-up) since the signal is driven by an external voltage divider.
+- **shutdown_helper** (`include/shutdown_helper.h`, `src/shutdown_helper.cpp`) - Wires `EspClock`/`EspDeepSleepController` and exposes `setupShutdownMonitor()`, called from `main.cpp`.
+- **test/test_shutdown_coordinator** - 6 new native unit tests covering debounce timing, cancellation, idempotency, and dual-battery persistence.
+
+### Changed
+- **Periodic safety-net persistence**: `BatteryMonitor::maybe_persist()` default interval changed from every 10 seconds to hourly, since GPIO27 shutdown handling is now the primary persistence path before power loss.
+- **markedCapacity PUT handler**: `MarkedCapacityConsumer` now calls `monitor->save_state()` immediately, matching the other four configuration parameters (previously only updated in-memory and relied on the next periodic/PUT save to persist).
+
+### Fixed
+- GPIO27 must **not** use an internal pull-up: an earlier revision used `INPUT_PULLUP`, which loaded and skewed the external voltage divider's signal level.
+
 ## 2026-01-18 - Signal K SOC Format Correction
 
 ### Changed

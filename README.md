@@ -14,6 +14,7 @@ This project follows **SOLID principles** for maintainability, testability, and 
 ### Orchestration Layer (Application Services)
 - **BatteryMonitor** (`include/battery_monitor.h`) - Coordinates sensor reading, integration, and persistence
 - **TemperatureMonitor** (`include/temperature_monitor.h`) - Temperature sensor orchestration with calibration
+- **ShutdownCoordinator** (`include/shutdown_coordinator.h`) - Debounces a GPIO27 low signal, persists both batteries, then requests deep sleep
 
 ### Infrastructure Layer (Interfaces & Implementations)
 - **ISensor** (`include/sensors/i_sensor.h`) - Sensor abstraction (voltage/current/power)
@@ -21,6 +22,8 @@ This project follows **SOLID principles** for maintainability, testability, and 
 - **IStorageProvider** (`include/storage/i_storage_provider.h`) - Persistence abstraction
 - **INA226Sensor** (`include/sensors/ina226_sensor.h`) - INA226 hardware implementation
 - **NVSStorageProvider** (`include/storage/nvs_storage_provider.h`) - ESP32 NVS storage
+- **IClock / ISleepController** (`include/shutdown_interfaces.h`) - Abstractions for the shutdown clock and deep-sleep trigger
+- **ShutdownMonitor** (`include/shutdown_monitor.h`) - ISR + FreeRTOS task watching GPIO27
 
 ### Factory Layer (Object Creation)
 - **BatteryFactory** (`include/battery_factory.h`) - Creates Battery instances from configuration
@@ -59,6 +62,10 @@ INA226 Hardware → ISensor → BatteryMonitor → Battery (domain)
 - ✅ State of Charge (SOC) calculation (sent to Signal K as 0-1 ratio)
 - ✅ Battery health tracking (capacity degradation)
 - ✅ Persistent state across reboots (NVS storage)
+- ✅ Emergency persistence on power loss: a low signal on GPIO27 saves both
+  batteries and enters deep sleep before the supply voltage is cut
+- ✅ Hourly safety-net persistence (in addition to the GPIO27 path and
+  immediate PUT-triggered saves)
 
 ### Remote Configuration (Signal K PUT)
 - Set Ah value manually
@@ -90,7 +97,7 @@ pio run --target clean
 
 ### Testing
 ```bash
-# Run all unit tests (171 tests)
+# Run all unit tests (177 tests)
 pio test -e az-delivery-devkit-v4
 
 # Run specific test suite
@@ -99,10 +106,10 @@ pio test -e az-delivery-devkit-v4 --filter test_battery
 
 ### Test Coverage
 - **Domain Layer**: Battery (23 tests), AmpHourCalculator (23 tests), BatteryConfig (11 tests)
-- **Orchestration**: BatteryMonitor (9 tests), TemperatureMonitor (13 tests)
+- **Orchestration**: BatteryMonitor (9 tests), TemperatureMonitor (13 tests), ShutdownCoordinator (6 tests)
 - **Infrastructure**: ISensor (10 tests), ITemperatureSensor (12 tests), IStorageProvider (15 tests)
 - **Integration**: SOC calculation (11 tests), Signal K paths (26 tests), INA226 config (12 tests)
-- **Total**: 171 tests, 100% passing
+- **Total**: 177 tests, 100% passing
 
 ## Signal K Integration
 
@@ -122,6 +129,8 @@ pio test -e az-delivery-devkit-v4 --filter test_battery
 - `electrical.batteries.{house|starter}.ah/capacity` - Current capacity (Ah, for degraded batteries)
 - `electrical.batteries.{house|starter}.ah/markedCapacity` - Nameplate capacity (Ah)
 
+All five parameters persist to NVS immediately when set via PUT.
+
 See [NODE_RED_CONFIGURATION.md](NODE_RED_CONFIGURATION.md) for examples.
 
 ## Configuration
@@ -132,6 +141,14 @@ static constexpr float HOUSE_BATTERY_CAPACITY_AH = 200.0f;
 static constexpr float STARTER_BATTERY_CAPACITY_AH = 110.0f;
 static constexpr unsigned int BATTERY_READ_INTERVAL_MS = 1000;
 ```
+
+### Emergency Shutdown (main.cpp)
+```cpp
+static constexpr uint8_t SHUTDOWN_PIN = 27;          // Active low, external voltage divider
+static constexpr uint64_t SHUTDOWN_DEBOUNCE_MS = 0;  // Min. time SHUTDOWN_PIN must stay low
+```
+GPIO27 uses plain `INPUT` (no internal pull-up) since the signal level is
+driven externally.
 
 ### Sensor Configuration (sensor_factory.cpp)
 - House battery: INA226 @ 0x40
@@ -182,6 +199,10 @@ include/
   battery_monitor.h            # Battery orchestration
   temperature_monitor.h        # Temperature orchestration
   ah_calculator.h              # Ah integration logic
+  shutdown_interfaces.h        # IClock / ISleepController abstractions
+  shutdown_coordinator.h       # GPIO27 debounce + persist + sleep logic
+  shutdown_monitor.h           # GPIO27 ISR + FreeRTOS task declaration
+  shutdown_helper.h            # Shutdown wiring declaration
   sensors/
     i_sensor.h                 # Sensor interface
     i_temperature_sensor.h     # Temperature sensor interface
@@ -196,6 +217,8 @@ src/
   battery_helper.cpp           # Setup implementation
   sensor_factory.cpp           # Factory static members
   onewire_helper.cpp           # Temperature sensor setup
+  shutdown_monitor.cpp         # GPIO27 ISR + FreeRTOS task
+  shutdown_helper.cpp          # Shutdown wiring (clock, sleep controller)
 
 test/
   test_battery/                # Battery domain tests (23)
@@ -204,7 +227,8 @@ test/
   test_calculator/             # AmpHourCalculator tests (23)
   test_sensor_interface/       # ISensor tests (10)
   test_storage_interface/      # IStorageProvider tests (15)
-  (... 12 test suites total, 171 tests)
+  test_shutdown_coordinator/   # ShutdownCoordinator tests (6)
+  (... 13 test suites total, 177 tests)
 ```
 
 ## Contributing

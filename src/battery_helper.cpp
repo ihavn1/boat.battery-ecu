@@ -123,8 +123,10 @@ BatteryMonitor* setupBatterySensor(ISensor& sensor, unsigned int read_interval,
     soc_sensor->connect_to(
         new SKOutputFloat(config.soc_path(), "", new SKMetadata("ratio", "State of Charge")));
 
-    // Persist state every 10 seconds if changed significantly (≥0.5 Ah)
-    sensesp_app->get_event_loop()->onRepeat(10000, [monitor]() {
+    // Periodic safety-net persistence (hourly, if changed significantly).
+    // GPIO27 shutdown handling is now the primary save path (see
+    // shutdown_helper.h), triggered right before power is cut.
+    sensesp_app->get_event_loop()->onRepeat(3600000, [monitor]() {
         monitor->maybe_persist();
     });
     
@@ -198,13 +200,14 @@ BatteryMonitor* setupBatterySensor(ISensor& sensor, unsigned int read_interval,
     // Marked capacity consumer (nameplate rating, rarely changes)
     class MarkedCapacityConsumer : public ValueConsumer<float> {
      public:
-      MarkedCapacityConsumer(Battery* bat) : battery_(bat) {}
+            MarkedCapacityConsumer(Battery* bat, BatteryMonitor* mon) : battery_(bat), monitor_(mon) {}
       void set(const float& new_value) override { 
-          // Marked capacity typically doesn't change, but allow it for testing
           battery_->set_marked_capacity_ah(new_value);
+                    monitor_->save_state();
       }
      private:
       Battery* battery_;
+            BatteryMonitor* monitor_;
     };
     
     // Register PUT request listeners for all configuration parameters
@@ -218,7 +221,7 @@ BatteryMonitor* setupBatterySensor(ISensor& sensor, unsigned int read_interval,
     current_capacity_input->connect_to(new CurrentCapacityConsumer(battery, monitor));
     
     auto* marked_capacity_input = new SKPutRequestListener<float>(marked_capacity_path);
-    marked_capacity_input->connect_to(new MarkedCapacityConsumer(battery));
+    marked_capacity_input->connect_to(new MarkedCapacityConsumer(battery, monitor));
 
     return monitor;
 }

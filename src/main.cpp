@@ -1,5 +1,6 @@
 #include "onewire_helper.h"
 #include "battery_helper.h"
+#include "shutdown_helper.h"
 // Boilerplate #includes:
 #include "sensesp_app_builder.h"
 #include "sensesp/signalk/signalk_output.h"
@@ -19,11 +20,13 @@ using namespace sensesp;
 // magic numbers scattered through the code.
 
 // GPIO pin assignments
-static constexpr uint8_t ONEWIRE_PIN = 25;  // Dallas OneWire temperature sensors
+static constexpr uint8_t ONEWIRE_PIN = 25;   // Dallas OneWire temperature sensors
+static constexpr uint8_t SHUTDOWN_PIN = 27;  // Low signal warns of imminent power loss
 
 // Timing configuration
 static constexpr unsigned int TEMPERATURE_READ_DELAY_MS = 2000;  // Temperature read interval
 static constexpr unsigned int BATTERY_READ_INTERVAL_MS = 1000;   // Battery sensor read interval
+static constexpr uint64_t SHUTDOWN_DEBOUNCE_MS = 0;  // Min. time SHUTDOWN_PIN must stay low
 
 // Battery capacity configuration (in Ah)
 static constexpr float HOUSE_BATTERY_CAPACITY_AH = 200.0f;    // House battery nameplate capacity
@@ -75,10 +78,20 @@ void setup()
     // - Event loop reactions (read sensors, integrate current, persist state)
 
     // House battery: 200Ah, reads voltage/current/power at 1Hz
-    setupBatterySensor(*houseSensor, BATTERY_READ_INTERVAL_MS, houseBattery->config(), storage);
+    BatteryMonitor* houseMonitor = setupBatterySensor(
+        *houseSensor, BATTERY_READ_INTERVAL_MS, houseBattery->config(), storage);
 
     // Starter battery: 110Ah, reads voltage/current/power at 1Hz
-    setupBatterySensor(*starterSensor, BATTERY_READ_INTERVAL_MS, starterBattery->config(), storage);
+    BatteryMonitor* starterMonitor = setupBatterySensor(
+        *starterSensor, BATTERY_READ_INTERVAL_MS, starterBattery->config(), storage);
+
+    // ========================================================================
+    // EMERGENCY SHUTDOWN SETUP
+    // ========================================================================
+    // A low signal on SHUTDOWN_PIN warns that the supply voltage will be cut
+    // shortly (~500ms). Persist both battery monitors immediately and enter
+    // deep sleep so the Ah/efficiency/capacity state is never lost.
+    setupShutdownMonitor(*houseMonitor, *starterMonitor, SHUTDOWN_PIN, SHUTDOWN_DEBOUNCE_MS);
 
     // ========================================================================
     // TEMPERATURE MONITORING SETUP

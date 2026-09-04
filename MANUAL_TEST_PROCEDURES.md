@@ -247,6 +247,37 @@ curl http://localhost:3000/signalk/v1/api/vessels/self/electrical/batteries/star
 
 ---
 
+## Test 10: GPIO27 Emergency Shutdown Persistence
+
+```bash
+# Set distinct, easily recognizable Ah values on both batteries
+curl -X PUT http://localhost:3000/signalk/v1/api/vessels/self/electrical/batteries/house/ah \
+  -H "Content-Type: application/json" -d '{"value": 123.4}'
+
+curl -X PUT http://localhost:3000/signalk/v1/api/vessels/self/electrical/batteries/starter/ah \
+  -H "Content-Type: application/json" -d '{"value": 56.7}'
+
+# Wait at least 1 second so update_readings()/integrate() have run,
+# then pull GPIO27 low (simulating imminent power loss) and release it
+# again, or physically cut power shortly after (~500ms window)
+
+# Serial monitor should show WiFi stopping, then no further output
+# (device enters deep sleep)
+
+# Power-cycle the board normally, then check both values persisted:
+curl http://localhost:3000/signalk/v1/api/vessels/self/electrical/batteries/house/ah
+curl http://localhost:3000/signalk/v1/api/vessels/self/electrical/batteries/starter/ah
+
+# Expected: 123.4Ah (house) and 56.7Ah (starter), even though the hourly
+# safety-net persistence had not yet run
+```
+
+**Pass Criteria:** Both batteries' Ah/capacity/efficiency state persist to NVS
+when GPIO27 goes low, before power is cut. GPIO27 must stay high (no
+spurious trigger) during normal operation.
+
+---
+
 ## Test Record Template
 
 Copy this for each test run:
@@ -265,6 +296,7 @@ Test 6 - Integration Over Time:[ ] PASS  [ ] FAIL
 Test 7 - Starter Battery:      [ ] PASS  [ ] FAIL
 Test 8 - Temperature Sensors:  [ ] PASS  [ ] FAIL
 Test 9 - Signal K Paths:       [ ] PASS  [ ] FAIL
+Test 10 - GPIO27 Shutdown:     [ ] PASS  [ ] FAIL
 
 Notes:
 _________________________________
