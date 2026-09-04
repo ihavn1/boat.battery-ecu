@@ -58,6 +58,9 @@ class MockSensor : public ISensor {
 // ISensor Interface Tests
 // ============================================================================
 
+void setUp(void) {}
+void tearDown(void) {}
+
 void test_sensor_interface_begin() {
   MockSensor sensor(12.5f, 5.0f, 62.5f, true);
   
