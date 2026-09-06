@@ -215,7 +215,7 @@ class Battery {
     const Battery& battery_;
   };
 
-  const BatteryConfig& config_;
+  BatteryConfig config_;
   AmpHourCalculator calculator_;
   
   // Sensor readings

@@ -109,7 +109,7 @@ class TemperatureMonitor {
   /**
    * @brief Get sensor name
    */
-  const char* name() const { return name_; }
+  const char* name() const { return name_.c_str(); }
 
   /**
    * @brief Get device index
@@ -151,7 +151,7 @@ class TemperatureMonitor {
  private:
   ITemperatureSensor& sensor_;
   uint8_t device_index_;
-  const char* name_;
+  String name_;
   float temperature_;
   TemperatureCalibration calibration_;
 };

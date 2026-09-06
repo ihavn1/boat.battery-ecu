@@ -46,33 +46,33 @@ class BatteryConfig {
         nominal_capacity_path_(nominal_capacity_path),
         remaining_capacity_path_(remaining_capacity_path),
         soc_path_(soc_path),
-        actual_capacity_path_(actual_capacity_path),
+        actual_capacity_path_(actual_capacity_path == nullptr ? "" : actual_capacity_path),
         nominal_voltage_(nominal_voltage) {}
 
   // Getters
-  const char* name() const { return name_; }
-  const char* chip_name() const { return chip_name_; }
+  const char* name() const { return name_.c_str(); }
+  const char* chip_name() const { return chip_name_.c_str(); }
   float marked_capacity_ah() const { return marked_capacity_ah_; }
   float initial_ah() const { return initial_ah_; }
-  const char* voltage_path() const { return voltage_path_; }
-  const char* current_path() const { return current_path_; }
-  const char* nominal_capacity_path() const { return nominal_capacity_path_; }
-  const char* remaining_capacity_path() const { return remaining_capacity_path_; }
-  const char* soc_path() const { return soc_path_; }
-  const char* actual_capacity_path() const { return actual_capacity_path_; }
+  const char* voltage_path() const { return voltage_path_.c_str(); }
+  const char* current_path() const { return current_path_.c_str(); }
+  const char* nominal_capacity_path() const { return nominal_capacity_path_.c_str(); }
+  const char* remaining_capacity_path() const { return remaining_capacity_path_.c_str(); }
+  const char* soc_path() const { return soc_path_.c_str(); }
+  const char* actual_capacity_path() const { return actual_capacity_path_.c_str(); }
   float nominal_voltage() const { return nominal_voltage_; }
 
  private:
-  const char* name_;
-  const char* chip_name_;
+  String name_;
+  String chip_name_;
   float marked_capacity_ah_;
   float initial_ah_;
-  const char* voltage_path_;
-  const char* current_path_;
-  const char* nominal_capacity_path_;
-  const char* remaining_capacity_path_;
-  const char* soc_path_;
-  const char* actual_capacity_path_;
+  String voltage_path_;
+  String current_path_;
+  String nominal_capacity_path_;
+  String remaining_capacity_path_;
+  String soc_path_;
+  String actual_capacity_path_;
   float nominal_voltage_;
 };
 

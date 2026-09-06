@@ -1,6 +1,7 @@
 #include <unity.h>
 #include <Arduino.h>
 #include "battery.h"
+#include "battery_factory.h"
 
 using namespace sensesp;
 
@@ -295,6 +296,17 @@ void test_battery_config_accessor() {
     TEST_ASSERT_EQUAL_STRING("test", retrieved.chip_name());
 }
 
+void test_factory_battery_retains_configuration() {
+    Battery* battery = BatteryFactory::createHouseBattery();
+
+    TEST_ASSERT_EQUAL_STRING("House Battery", battery->name());
+    TEST_ASSERT_EQUAL_STRING("electrical.batteries.house.capacity.remaining",
+                             battery->config().remaining_capacity_path());
+    TEST_ASSERT_EQUAL_FLOAT(200.0f, battery->marked_capacity_ah());
+
+    delete battery;
+}
+
 void setup() {
     delay(2000);
     UNITY_BEGIN();
@@ -322,6 +334,7 @@ void setup() {
     RUN_TEST(test_battery_typical_starter_scenario);
     RUN_TEST(test_battery_degraded_capacity);
     RUN_TEST(test_battery_config_accessor);
+    RUN_TEST(test_factory_battery_retains_configuration);
     
     UNITY_END();
 }
