@@ -44,11 +44,9 @@ void test_temperature_range_starter_battery(void) {
 }
 
 void test_celsius_to_kelvin_conversion(void) {
-    // Signal K uses Kelvin, ensure conversion is correct
-    // K = °C + 273.15
     float celsius = 25.0f;
     float kelvin = celsius + 273.15f;
-    
+
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 298.15f, kelvin);
 }
 
