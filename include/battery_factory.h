@@ -36,9 +36,10 @@ class BatteryFactory {
         capacity_ah,
         "electrical.batteries.house.voltage",
         "electrical.batteries.house.current",
-        "electrical.batteries.house.power",
-        "electrical.batteries.house.ah",
-        "electrical.batteries.house.stateOfCharge"
+        "electrical.batteries.house.capacity.nominal",
+        "electrical.batteries.house.capacity.remaining",
+        "electrical.batteries.house.capacity.stateOfCharge",
+        "electrical.batteries.house.capacity.actual"
     );
     return create(config);
   }
@@ -56,9 +57,10 @@ class BatteryFactory {
         capacity_ah,
         "electrical.batteries.starter.voltage",
         "electrical.batteries.starter.current",
-        "electrical.batteries.starter.power",
-        "electrical.batteries.starter.ah",
-        "electrical.batteries.starter.stateOfCharge"
+        "electrical.batteries.starter.capacity.nominal",
+        "electrical.batteries.starter.capacity.remaining",
+        "electrical.batteries.starter.capacity.stateOfCharge",
+        "electrical.batteries.starter.capacity.actual"
     );
     return create(config);
   }
@@ -81,9 +83,10 @@ class BatteryFactory {
         capacity_ah,
         (base + ".voltage").c_str(),
         (base + ".current").c_str(),
-        (base + ".power").c_str(),
-        (base + ".ah").c_str(),
-        (base + ".stateOfCharge").c_str()
+        (base + ".capacity.nominal").c_str(),
+        (base + ".capacity.remaining").c_str(),
+        (base + ".capacity.stateOfCharge").c_str(),
+        (base + ".capacity.actual").c_str()
     );
     return create(config);
   }

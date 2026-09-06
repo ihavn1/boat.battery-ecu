@@ -17,18 +17,18 @@ void test_house_battery_current_path(void) {
     TEST_ASSERT_TRUE(strstr(path, "electrical.batteries.house") != NULL);
 }
 
-void test_house_battery_power_path(void) {
-    const char* path = "electrical.batteries.house.power";
+void test_house_battery_nominal_capacity_path(void) {
+    const char* path = "electrical.batteries.house.capacity.nominal";
     TEST_ASSERT_TRUE(strstr(path, "electrical.batteries.house") != NULL);
 }
 
-void test_house_battery_ah_path(void) {
-    const char* path = "electrical.batteries.house.ah";
+void test_house_battery_remaining_capacity_path(void) {
+    const char* path = "electrical.batteries.house.capacity.remaining";
     TEST_ASSERT_TRUE(strstr(path, "electrical.batteries.house") != NULL);
 }
 
 void test_house_battery_soc_path(void) {
-    const char* path = "electrical.batteries.house.stateOfCharge";
+    const char* path = "electrical.batteries.house.capacity.stateOfCharge";
     TEST_ASSERT_TRUE(strstr(path, "electrical.batteries.house") != NULL);
     TEST_ASSERT_TRUE(strstr(path, "stateOfCharge") != NULL);
 }
@@ -48,18 +48,18 @@ void test_starter_battery_current_path(void) {
     TEST_ASSERT_TRUE(strstr(path, "electrical.batteries.starter") != NULL);
 }
 
-void test_starter_battery_power_path(void) {
-    const char* path = "electrical.batteries.starter.power";
+void test_starter_battery_nominal_capacity_path(void) {
+    const char* path = "electrical.batteries.starter.capacity.nominal";
     TEST_ASSERT_TRUE(strstr(path, "electrical.batteries.starter") != NULL);
 }
 
-void test_starter_battery_ah_path(void) {
-    const char* path = "electrical.batteries.starter.ah";
+void test_starter_battery_remaining_capacity_path(void) {
+    const char* path = "electrical.batteries.starter.capacity.remaining";
     TEST_ASSERT_TRUE(strstr(path, "electrical.batteries.starter") != NULL);
 }
 
 void test_starter_battery_soc_path(void) {
-    const char* path = "electrical.batteries.starter.stateOfCharge";
+    const char* path = "electrical.batteries.starter.capacity.stateOfCharge";
     TEST_ASSERT_TRUE(strstr(path, "electrical.batteries.starter") != NULL);
 }
 
@@ -73,31 +73,31 @@ void test_starter_battery_temperature_path(void) {
 // ============================================================================
 
 void test_charge_efficiency_path_format(void) {
-    const char* base_path = "electrical.batteries.house.ah";
-    String charge_path = String(base_path) + "/chargeEfficiency";
+    const char* base_path = "electrical.batteries.house.configuration";
+    String charge_path = String(base_path) + ".chargeEfficiency";
     
-    TEST_ASSERT_TRUE(charge_path.indexOf("/chargeEfficiency") > 0);
+    TEST_ASSERT_TRUE(charge_path.indexOf(".chargeEfficiency") > 0);
 }
 
 void test_discharge_efficiency_path_format(void) {
-    const char* base_path = "electrical.batteries.house.ah";
-    String discharge_path = String(base_path) + "/dischargeEfficiency";
+    const char* base_path = "electrical.batteries.house.configuration";
+    String discharge_path = String(base_path) + ".dischargeEfficiency";
     
-    TEST_ASSERT_TRUE(discharge_path.indexOf("/dischargeEfficiency") > 0);
+    TEST_ASSERT_TRUE(discharge_path.indexOf(".dischargeEfficiency") > 0);
 }
 
 void test_capacity_path_format(void) {
-    const char* base_path = "electrical.batteries.house.ah";
-    String capacity_path = String(base_path) + "/capacity";
+    const char* base_path = "electrical.batteries.house.capacity";
+    String capacity_path = String(base_path) + ".actual";
     
-    TEST_ASSERT_TRUE(capacity_path.indexOf("/capacity") > 0);
+    TEST_ASSERT_TRUE(capacity_path == "electrical.batteries.house.capacity.actual");
 }
 
 void test_marked_capacity_path_format(void) {
-    const char* base_path = "electrical.batteries.house.ah";
-    String marked_capacity_path = String(base_path) + "/markedCapacity";
+    const char* base_path = "electrical.batteries.house.capacity";
+    String marked_capacity_path = String(base_path) + ".nominal";
     
-    TEST_ASSERT_TRUE(marked_capacity_path.indexOf("/markedCapacity") > 0);
+    TEST_ASSERT_TRUE(marked_capacity_path == "electrical.batteries.house.capacity.nominal");
 }
 
 // ============================================================================
@@ -187,16 +187,16 @@ void setup() {
     // House battery paths
     RUN_TEST(test_house_battery_voltage_path);
     RUN_TEST(test_house_battery_current_path);
-    RUN_TEST(test_house_battery_power_path);
-    RUN_TEST(test_house_battery_ah_path);
+    RUN_TEST(test_house_battery_nominal_capacity_path);
+    RUN_TEST(test_house_battery_remaining_capacity_path);
     RUN_TEST(test_house_battery_soc_path);
     RUN_TEST(test_house_battery_temperature_path);
     
     // Starter battery paths
     RUN_TEST(test_starter_battery_voltage_path);
     RUN_TEST(test_starter_battery_current_path);
-    RUN_TEST(test_starter_battery_power_path);
-    RUN_TEST(test_starter_battery_ah_path);
+    RUN_TEST(test_starter_battery_nominal_capacity_path);
+    RUN_TEST(test_starter_battery_remaining_capacity_path);
     RUN_TEST(test_starter_battery_soc_path);
     RUN_TEST(test_starter_battery_temperature_path);
     

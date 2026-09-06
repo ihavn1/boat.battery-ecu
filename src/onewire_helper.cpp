@@ -38,5 +38,8 @@ void add_onewire_temp(DallasTemperatureSensors* dts, unsigned int read_delay,
       ->set_description((std::string("Signal K path for the ") + human_label).c_str())
       ->set_sort_order(sk_sort);
 
-  sensor->connect_to(calibration)->connect_to(sk_output);
+    sensor->connect_to(calibration)->connect_to(
+            new LambdaTransform<float, float>([](float celsius) {
+                return celsius + 273.15f;
+            }))->connect_to(sk_output);
 }

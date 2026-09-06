@@ -29,16 +29,16 @@ namespace sensesp {
  * - Persist state every 10s if changed significantly (≥0.5 Ah)
  * 
  * Signal K outputs:
- * - voltage, current, power (raw sensor readings)
- * - ah (integrated amp-hours)
- * - soc (state of charge as ratio 0-1, converted from internal percentage 0-100%)
+ * - voltage and current (raw sensor readings)
+ * - capacity.nominal, capacity.actual, capacity.remaining (joules)
+ * - capacity.stateOfCharge (ratio 0-1)
  * 
  * Signal K inputs (PUT requests):
- * - ah - Set Ah value (persists immediately)
- * - ah/chargeEfficiency - Set charge efficiency % (persists immediately)
- * - ah/dischargeEfficiency - Set discharge efficiency % (persists immediately)
- * - ah/capacity - Set current capacity for degraded batteries (persists immediately)
- * - ah/markedCapacity - Set nameplate capacity (for testing/reconfiguration)
+ * - capacity/remaining - Set remaining energy in joules (persists immediately)
+ * - capacity/actual - Set actual capacity in joules (persists immediately)
+ * - capacity/nominal - Set nominal capacity in joules (persists immediately)
+ * - configuration/chargeEfficiency - Custom charge efficiency setting
+ * - configuration/dischargeEfficiency - Custom discharge efficiency setting
  * 
  * @param sensor Sensor implementation (injected dependency)
  * @param read_interval Sensor read interval in milliseconds
@@ -75,19 +75,13 @@ BatteryMonitor* setupBatterySensor(ISensor& sensor, unsigned int read_interval,
     voltage_sensor->connect_to(
         new SKOutputFloat(config.voltage_path(), "", new SKMetadata("V", "Voltage")));
 
-    // Current output (A, positive = charging, negative = discharging)
+    // Signal K defines battery current as positive out of the battery.
+    // The domain model uses positive = charging, so invert at this boundary.
     auto* current_sensor = new RepeatSensor<float>(read_interval, [battery]() { 
-        return battery->current(); 
+        return -battery->current();
     });
     current_sensor->connect_to(
         new SKOutputFloat(config.current_path(), "", new SKMetadata("A", "Amps")));
-
-    // Power output (W)
-    auto* power_sensor = new RepeatSensor<float>(read_interval, [battery]() { 
-        return battery->power(); 
-    });
-    power_sensor->connect_to(
-        new SKOutputFloat(config.power_path(), "", new SKMetadata("W", "Watts")));
 
     // ========================================================================
     // EVENT LOOP REACTIONS: Periodic tasks
@@ -108,12 +102,32 @@ BatteryMonitor* setupBatterySensor(ISensor& sensor, unsigned int read_interval,
     // SIGNAL K OUTPUTS: Battery state
     // ========================================================================
 
-    // Amp-hour (Ah) output - integrated current over time
-    auto* ah_sensor = new RepeatSensor<float>(1000, [battery]() { 
-        return battery->ah(); 
+    // Signal K battery capacity is expressed as energy in joules.
+    auto* nominal_capacity_sensor = new RepeatSensor<float>(1000, [battery, &config]() {
+        return battery->marked_capacity_ah() * config.nominal_voltage() * 3600.0f;
     });
-    ah_sensor->connect_to(
-        new SKOutputFloat(config.ah_path(), "", new SKMetadata("Ah", "Ampere hours")));
+    nominal_capacity_sensor->connect_to(
+        new SKOutputFloat(config.nominal_capacity_path(), "",
+                  new SKMetadata("J", "Nominal capacity (J; Ah at 12 V)",
+                                 "Nominal energy capacity in joules; divide by 43200 to get Ah at 12 V")));
+
+    auto* remaining_capacity_sensor = new RepeatSensor<float>(1000, [battery, &config]() {
+        return static_cast<float>(battery->ah() * config.nominal_voltage() * 3600.0);
+    });
+    remaining_capacity_sensor->connect_to(
+        new SKOutputFloat(config.remaining_capacity_path(), "",
+                  new SKMetadata("J", "Remaining capacity (J; Ah at 12 V)",
+                                 "Remaining energy in joules; divide by 43200 to get Ah at 12 V")));
+
+    if (config.actual_capacity_path() != nullptr) {
+      auto* actual_capacity_sensor = new RepeatSensor<float>(1000, [battery, &config]() {
+          return battery->current_capacity_ah() * config.nominal_voltage() * 3600.0f;
+      });
+      actual_capacity_sensor->connect_to(
+          new SKOutputFloat(config.actual_capacity_path(), "",
+                            new SKMetadata("J", "Actual capacity (J; Ah at 12 V)",
+                                           "Actual energy capacity in joules; divide by 43200 to get Ah at 12 V")));
+    }
     
     // State of Charge (SOC) as ratio (0-1 for Signal K standard)
     // Battery SOC is calculated as 0-100%, converted to 0-1 ratio here
@@ -136,27 +150,32 @@ BatteryMonitor* setupBatterySensor(ISensor& sensor, unsigned int read_interval,
     // Custom ValueConsumer classes handle PUT requests and persist changes
     // immediately to NVS to ensure manual updates are never lost
 
-    // Ah value consumer - sets Ah and persists immediately
-    class AhConsumer : public ValueConsumer<float> {
+    // Remaining capacity is received in joules and retained internally in Ah.
+    class RemainingCapacityConsumer : public ValueConsumer<float> {
      public:
-      AhConsumer(Battery* bat, BatteryMonitor* mon) : battery_(bat), monitor_(mon) {}
+      RemainingCapacityConsumer(Battery* bat, BatteryMonitor* mon, float nominal_voltage)
+          : battery_(bat), monitor_(mon), nominal_voltage_(nominal_voltage) {}
       void set(const float& new_value) override { 
-          battery_->set_ah(new_value);
+          battery_->set_ah(new_value / (nominal_voltage_ * 3600.0f));
           monitor_->save_state();  // Persist immediately on manual set
       }
      private:
       Battery* battery_;
       BatteryMonitor* monitor_;
+      float nominal_voltage_;
     };
     
-    auto* ah_sk_input = new SKPutRequestListener<float>(config.ah_path());
-    ah_sk_input->connect_to(new AhConsumer(battery, monitor));
+    auto* remaining_capacity_input =
+        new SKPutRequestListener<float>(config.remaining_capacity_path());
+    remaining_capacity_input->connect_to(
+        new RemainingCapacityConsumer(battery, monitor, config.nominal_voltage()));
     
-    // Configuration path structure: base_path/chargeEfficiency, etc.
-    String charge_eff_path = String(config.ah_path()) + "/chargeEfficiency";
-    String discharge_eff_path = String(config.ah_path()) + "/dischargeEfficiency";
-    String capacity_path = String(config.ah_path()) + "/capacity";  // Current capacity (degrades)
-    String marked_capacity_path = String(config.ah_path()) + "/markedCapacity";  // Nameplate capacity
+    // Efficiency settings are custom because Signal K has no standard fields
+    // for coulomb-counting efficiency.
+    String battery_path = String(config.soc_path());
+    battery_path = battery_path.substring(0, battery_path.indexOf(".capacity"));
+    String charge_eff_path = battery_path + ".configuration.chargeEfficiency";
+    String discharge_eff_path = battery_path + ".configuration.dischargeEfficiency";
     
     // Charge efficiency consumer (0-100%, affects charging)
     class ChargeEfficiencyConsumer : public ValueConsumer<float> {
@@ -184,30 +203,34 @@ BatteryMonitor* setupBatterySensor(ISensor& sensor, unsigned int read_interval,
       BatteryMonitor* monitor_;
     };
     
-    // Current capacity consumer (for degraded batteries)
-    class CurrentCapacityConsumer : public ValueConsumer<float> {
+        // Actual capacity is received in joules and retained internally in Ah.
+        class ActualCapacityConsumer : public ValueConsumer<float> {
      public:
-      CurrentCapacityConsumer(Battery* bat, BatteryMonitor* mon) : battery_(bat), monitor_(mon) {}
+            ActualCapacityConsumer(Battery* bat, BatteryMonitor* mon, float nominal_voltage)
+          : battery_(bat), monitor_(mon), nominal_voltage_(nominal_voltage) {}
       void set(const float& new_value) override { 
-          battery_->set_current_capacity_ah(new_value);
+          battery_->set_current_capacity_ah(new_value / (nominal_voltage_ * 3600.0f));
           monitor_->save_state();  // Persist immediately
       }
      private:
       Battery* battery_;
       BatteryMonitor* monitor_;
+      float nominal_voltage_;
     };
     
-    // Marked capacity consumer (nameplate rating, rarely changes)
-    class MarkedCapacityConsumer : public ValueConsumer<float> {
+    // Nominal capacity is received in joules and retained internally in Ah.
+    class NominalCapacityConsumer : public ValueConsumer<float> {
      public:
-            MarkedCapacityConsumer(Battery* bat, BatteryMonitor* mon) : battery_(bat), monitor_(mon) {}
+      NominalCapacityConsumer(Battery* bat, BatteryMonitor* mon, float nominal_voltage)
+          : battery_(bat), monitor_(mon), nominal_voltage_(nominal_voltage) {}
       void set(const float& new_value) override { 
-          battery_->set_marked_capacity_ah(new_value);
-                    monitor_->save_state();
+          battery_->set_marked_capacity_ah(new_value / (nominal_voltage_ * 3600.0f));
+          monitor_->save_state();
       }
      private:
       Battery* battery_;
-            BatteryMonitor* monitor_;
+      BatteryMonitor* monitor_;
+      float nominal_voltage_;
     };
     
     // Register PUT request listeners for all configuration parameters
@@ -217,11 +240,15 @@ BatteryMonitor* setupBatterySensor(ISensor& sensor, unsigned int read_interval,
     auto* discharge_eff_input = new SKPutRequestListener<float>(discharge_eff_path);
     discharge_eff_input->connect_to(new DischargeEfficiencyConsumer(battery, monitor));
     
-    auto* current_capacity_input = new SKPutRequestListener<float>(capacity_path);
-    current_capacity_input->connect_to(new CurrentCapacityConsumer(battery, monitor));
+    if (config.actual_capacity_path() != nullptr) {
+      auto* current_capacity_input = new SKPutRequestListener<float>(config.actual_capacity_path());
+      current_capacity_input->connect_to(
+          new ActualCapacityConsumer(battery, monitor, config.nominal_voltage()));
+    }
     
-    auto* marked_capacity_input = new SKPutRequestListener<float>(marked_capacity_path);
-    marked_capacity_input->connect_to(new MarkedCapacityConsumer(battery, monitor));
+    auto* marked_capacity_input = new SKPutRequestListener<float>(config.nominal_capacity_path());
+    marked_capacity_input->connect_to(
+        new NominalCapacityConsumer(battery, monitor, config.nominal_voltage()));
 
     return monitor;
 }

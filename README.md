@@ -115,19 +115,24 @@ pio test -e az-delivery-devkit-v4 --filter test_battery
 
 ### Published Paths
 - `electrical.batteries.house.voltage` - House battery voltage (V)
-- `electrical.batteries.house.current` - House battery current (A, + charging, - discharging)
-- `electrical.batteries.house.power` - House battery power (W)
-- `electrical.batteries.house.ah` - House battery amp-hours (Ah)
-- `electrical.batteries.house.stateOfCharge` - House battery SOC (ratio 0-1, per Signal K spec)
-- `electrical.batteries.house.temperature` - House battery temperature (°C)
+- `electrical.batteries.house.current` - House battery current (A, + out of battery, - into battery)
+- `electrical.batteries.house.temperature` - House battery temperature (K)
+- `electrical.batteries.house.capacity.nominal` - Nameplate energy capacity (J)
+- `electrical.batteries.house.capacity.actual` - Current usable energy capacity (J)
+- `electrical.batteries.house.capacity.remaining` - Remaining energy (J)
+- `electrical.batteries.house.capacity.stateOfCharge` - House battery SOC (ratio 0-1)
 - (Similar paths for `starter` battery)
 
+Capacity values remain in the official Signal K unit, joules. The firmware
+metadata identifies the equivalent amp-hour interpretation at the configured
+12 V nominal voltage: `Ah = J / 43200`.
+
 ### Configuration Paths (PUT requests)
-- `electrical.batteries.{house|starter}.ah` - Set Ah value
-- `electrical.batteries.{house|starter}.ah/chargeEfficiency` - Charge efficiency %
-- `electrical.batteries.{house|starter}.ah/dischargeEfficiency` - Discharge efficiency %
-- `electrical.batteries.{house|starter}.ah/capacity` - Current capacity (Ah, for degraded batteries)
-- `electrical.batteries.{house|starter}.ah/markedCapacity` - Nameplate capacity (Ah)
+- `electrical.batteries.{house|starter}.capacity.remaining` - Set remaining energy (J)
+- `electrical.batteries.{house|starter}.capacity.actual` - Set current usable energy capacity (J)
+- `electrical.batteries.{house|starter}.capacity.nominal` - Set nameplate energy capacity (J)
+- `electrical.batteries.{house|starter}.configuration.chargeEfficiency` - Custom charge efficiency (%)
+- `electrical.batteries.{house|starter}.configuration.dischargeEfficiency` - Custom discharge efficiency (%)
 
 All five parameters persist to NVS immediately when set via PUT.
 

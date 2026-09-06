@@ -37,10 +37,10 @@ pio device monitor
 
 **Signal K Integration Tests:**
 ```bash
-# Test SK PUT requests from Node-RED or curl:
-curl -X PUT http://<SIGNALK>:3000/signalk/v1/api/vessels/self/electrical/batteries/house/ah \
+# Test official Signal K PUT paths from Node-RED or curl:
+curl -X PUT http://<SIGNALK>:3000/signalk/v1/api/vessels/self/electrical/batteries/house/capacity/remaining \
   -H "Content-Type: application/json" \
-  -d '{"value": 180.5}'
+  -d '{"value": 4320000}'
 
 # Verify response and check updated value in Signal K
 ```

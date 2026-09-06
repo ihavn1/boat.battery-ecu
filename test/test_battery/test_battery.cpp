@@ -219,9 +219,9 @@ void test_battery_typical_house_scenario() {
         200.0f,
         "electrical.batteries.house.voltage",
         "electrical.batteries.house.current",
-        "electrical.batteries.house.power",
-        "electrical.batteries.house.ah",
-        "electrical.batteries.house.stateOfCharge"
+        "electrical.batteries.house.capacity.nominal",
+        "electrical.batteries.house.capacity.remaining",
+        "electrical.batteries.house.capacity.stateOfCharge"
     );
     
     Battery house(houseConfig);
@@ -251,9 +251,9 @@ void test_battery_typical_starter_scenario() {
         110.0f,
         "electrical.batteries.starter.voltage",
         "electrical.batteries.starter.current",
-        "electrical.batteries.starter.power",
-        "electrical.batteries.starter.ah",
-        "electrical.batteries.starter.stateOfCharge"
+        "electrical.batteries.starter.capacity.nominal",
+        "electrical.batteries.starter.capacity.remaining",
+        "electrical.batteries.starter.capacity.stateOfCharge"
     );
     
     Battery starter(starterConfig);
