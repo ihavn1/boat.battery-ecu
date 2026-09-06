@@ -4,3 +4,4 @@
 .vscode/launch.json
 .vscode/ipch
 .github/copilot-instructions.md
+*.code-workspace
